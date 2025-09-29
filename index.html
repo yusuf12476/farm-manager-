@@ -1,0 +1,1971 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Farm Tracker Pro</title>
+    <!-- Load Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Load Chart.js for data visualization -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+    
+    <!-- Configure Tailwind for custom colors and font -->
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        'primary-green': '#059669', // Emerald 600 - Deeper, richer green
+                        'primary-green-dark': '#047857', // Emerald 700
+                        'secondary-yellow': '#f59e0b', // Amber 500 - Rich yellow/orange
+                        'bg-light': '#f4f7f9', // Very light, professional background
+                        'card-bg': '#ffffff',
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                    },
+                }
+            }
+        }
+    </script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@100..900&display=swap');
+        
+        body {
+            font-family: 'Inter', sans-serif; /* Use the custom font */
+            background-color: theme('colors.bg-light');
+            color: theme('colors.gray.700');
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+        }
+        
+        .gradient-text {
+            background: linear-gradient(to right, theme('colors.primary-green'), theme('colors.primary-green-dark'));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .active-tab {
+            color: #059669;
+            font-weight: 600;
+            position: relative;
+        }
+
+        /* Underline effect for active tab */
+        .active-tab::after {
+            content: '';
+            position: absolute;
+            bottom: -2px; /* Adjusted for the border */
+            left: 0;
+            width: 100%;
+            height: 3px;
+            background-color: #059669;
+            border-radius: 9999px;
+        }
+
+        /* Custom scrollbar for data lists */
+        #transaction-list-container::-webkit-scrollbar,
+        #production-list-container::-webkit-scrollbar {
+            width: 6px;
+        }
+        #transaction-list-container::-webkit-scrollbar-thumb,
+        #production-list-container::-webkit-scrollbar-thumb {
+            background-color: #d1d5db;
+            border-radius: 3px;
+        }
+
+        /* Custom class for input focus */
+        .input-focus:focus {
+            --tw-ring-shadow: 0 0 0 2px rgba(5, 150, 105, 0.5);
+            box-shadow: var(--tw-ring-shadow);
+            border-color: #059669;
+        }
+    </style>
+</head>
+<body class="min-h-screen">
+
+    <div id="app" class="max-w-7xl mx-auto p-4 md:p-10">
+        <!-- Header -->
+        <header class="mb-10 p-6 bg-gradient-to-br from-white to-emerald-50/50 shadow-sm rounded-2xl border border-gray-200/80">
+            <h1 class="text-4xl font-extrabold text-gray-800 flex items-center">
+                <svg class="w-10 h-10 mr-3 gradient-text" fill="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8h5z"></path></svg>
+                Farm Tracker <span class="gradient-text ml-2">Pro</span>
+            </h1>
+            <p id="auth-status" class="text-sm text-gray-500 mt-1">Initializing...</p>
+        </header>
+
+        <!-- Navigation Tabs -->
+        <nav class="border-b-2 border-gray-200 mb-10">
+            <div class="flex space-x-8">
+                <button onclick="changeView('dashboard')" id="tab-dashboard" class="py-3 px-1 text-gray-600 hover:text-primary-green transition duration-200 active-tab">Dashboard</button>
+                <button onclick="changeView('livestock')" id="tab-livestock" class="py-3 px-1 text-gray-600 hover:text-primary-green transition duration-200">Livestock</button>
+                <button onclick="changeView('finance')" id="tab-finance" class="py-3 px-1 text-gray-600 hover:text-primary-green transition duration-200">Finance</button>
+                <button onclick="changeView('production')" id="tab-production" class="py-3 px-1 text-gray-600 hover:text-primary-green transition duration-200">Production</button>
+                <button onclick="changeView('tasks')" id="tab-tasks" class="py-3 px-1 text-gray-600 hover:text-primary-green transition duration-200">Tasks</button>
+                <button onclick="changeView('inventory')" id="tab-inventory" class="py-3 px-1 text-gray-600 hover:text-primary-green transition duration-200">Inventory</button>
+            </div>
+        </nav>
+
+        <!-- Main Content Area (View Containers) -->
+        <div id="view-dashboard" class="view-container">
+            <!-- Dashboard content will be rendered here -->
+        </div>
+
+        <div id="view-livestock" class="view-container hidden">
+            <!-- Livestock content will be rendered here -->
+        </div>
+
+        <div id="view-finance" class="view-container hidden">
+            <!-- Finance content will be rendered here -->
+        </div>
+
+        <div id="view-production" class="view-container hidden">
+            <!-- Production content will be rendered here -->
+        </div>
+
+        <div id="view-tasks" class="view-container hidden">
+            <!-- Tasks content will be rendered here -->
+        </div>
+
+        <div id="view-inventory" class="view-container hidden">
+            <!-- Inventory content will be rendered here -->
+        </div>
+
+    </div>
+
+    <!-- 1. DELETE Confirmation Modal -->
+    <div id="delete-modal-backdrop" class="fixed inset-0 bg-gray-900 bg-opacity-70 z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-card-bg p-8 rounded-xl shadow-2xl max-w-sm w-full transform transition-all duration-300 scale-95 opacity-0" id="delete-modal-content">
+            <h3 class="text-xl font-bold mb-4 text-red-600 flex items-center">
+                <svg class="w-6 h-6 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
+                Confirm Deletion
+            </h3>
+            <p id="delete-modal-message" class="mb-6 text-gray-700">Are you sure you want to proceed?</p>
+            <div class="flex justify-end space-x-3">
+                <button onclick="closeModal('delete')" class="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition font-medium">Cancel</button>
+                <button id="delete-modal-confirm-btn" class="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition font-medium shadow-md">Delete Permanently</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 2. EDIT Modal -->
+    <div id="edit-modal-backdrop" class="fixed inset-0 bg-gray-900 bg-opacity-70 z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-card-bg p-8 rounded-2xl shadow-2xl max-w-lg w-full transform transition-all duration-300 scale-95 opacity-0" id="edit-modal-content">
+            <h3 id="edit-modal-title" class="text-2xl font-bold mb-5 pb-2 border-b-2 border-primary-green/20 text-primary-green">Edit Record</h3>
+            <form id="edit-form" onsubmit="event.preventDefault(); handleUpdateRecord();">
+                <!-- Form content is injected here dynamically by JS -->
+                <div id="edit-form-content" class="grid grid-cols-1 gap-4">
+                    <p class="text-gray-500">Loading form...</p>
+                </div>
+                
+                <p id="edit-msg" class="text-center mt-4 text-sm font-medium hidden"></p>
+
+                <div class="flex justify-end space-x-3 mt-6 pt-4 border-t border-gray-100">
+                    <button type="button" onclick="closeModal('edit')" class="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg font-medium hover:bg-gray-300 transition">Cancel</button>
+                    <button type="submit" class="px-6 py-2 bg-primary-green text-white rounded-lg font-bold hover:bg-primary-green-dark transition shadow-md shadow-primary-green/30">Save Changes</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- LOCAL DATA SCRIPT -->
+    <script>
+        // --- LOCAL DATA STATE ---
+        let userId = "local_farmer_12345";
+        let isAuthReady = false;
+        let currentEditingRecord = null; // Stores the id and collection of the record being edited
+
+        // Global filter state and chart instances for Finance tab
+        let financeFilters = {
+            type: 'all', // 'all', 'income', 'expense'
+            category: 'all', // 'all' or specific category name (currently not implemented in filter UI but available for future use)
+            dateRange: 'all', // 'all', '30d', '90d', 'custom'
+            startDate: null,
+            endDate: null
+        };
+        let expenseChart = null;
+        let monthlyChart = null;
+
+
+        window.farmData = {
+            livestock: [],
+            transactions: [],
+            production: [],
+            tasks: [],
+            inventory: [],
+            // Available options for the UI
+            livestockTypes: ["bees", "heifers", "bulls", "chicken", "duck", "geese", "fish", "goats", "sheep", "turkey"],
+            productionTypes: ["Milk (Liters)", "Eggs (Dozens)", "Honey (KGs)"],
+            transactionCategories: {
+                'expense': ['Feed/Hay', 'Fertilizer/Seed', 'Equipment/Maintenance', 'Labor', 'Fuel/Utilities', 'Other Input'],
+                'income': ['Sales: Cattle', 'Sales: Poultry', 'Sales: Wool/Fiber', 'Sales: Honey', 'Sales: Dairy', 'Other Income']
+            },
+            taskPriorities: ['High', 'Medium', 'Low'],
+            taskStatuses: ['To Do', 'In Progress', 'Done'],
+            inventoryCategories: ['Feed', 'Medicine', 'Fertilizer', 'Seed', 'Equipment Part', 'Fuel', 'Other Supplies']
+        };
+
+        /**
+         * Loads the finance filter state from localStorage.
+         */
+        function loadFiltersFromLocalStorage() {
+            const storedFilters = localStorage.getItem('farmFinanceFilters');
+            if (storedFilters) {
+                try {
+                    const loadedFilters = JSON.parse(storedFilters);
+                    // Merge with defaults to ensure new filter properties are not missed
+                    financeFilters = { ...financeFilters, ...loadedFilters };
+                } catch (e) { console.error("Could not parse finance filters from localStorage", e); }
+            }
+        }
+
+        // --- LOCAL STORAGE PERSISTENCE ---
+
+        /**
+         * Loads data from localStorage into the farmData object on startup.
+         */
+        function loadFromLocalStorage() {
+            const storedLivestock = localStorage.getItem('farmLivestock');
+            const storedTransactions = localStorage.getItem('farmTransactions');
+            const storedProduction = localStorage.getItem('farmProduction');
+            const storedTasks = localStorage.getItem('farmTasks');
+            const storedInventory = localStorage.getItem('farmInventory');
+
+            if (storedLivestock) {
+                farmData.livestock = JSON.parse(storedLivestock);
+            }
+            if (storedTransactions) {
+                // Load and immediately sort transactions by date descending
+                farmData.transactions = JSON.parse(storedTransactions).sort((a, b) => new Date(b.date) - new Date(a.date));
+            }
+            if (storedProduction) {
+                // Load and immediately sort production by date descending
+                farmData.production = JSON.parse(storedProduction).sort((a, b) => new Date(b.date) - new Date(a.date));
+            }
+            if (storedTasks) {
+                // Load and sort tasks by due date ascending
+                farmData.tasks = JSON.parse(storedTasks).sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate));
+            }
+            if (storedInventory) {
+                // Load and sort inventory by name
+                farmData.inventory = JSON.parse(storedInventory).sort((a, b) => a.name.localeCompare(b.name));
+            }
+        }
+
+        /**
+         * Saves the current farmData state to localStorage after any CRUD operation.
+         */
+        function saveToLocalStorage() {
+            localStorage.setItem('farmLivestock', JSON.stringify(farmData.livestock));
+            localStorage.setItem('farmTransactions', JSON.stringify(farmData.transactions));
+            localStorage.setItem('farmProduction', JSON.stringify(farmData.production));
+            localStorage.setItem('farmTasks', JSON.stringify(farmData.tasks));
+            localStorage.setItem('farmInventory', JSON.stringify(farmData.inventory));
+        }
+
+        // --- INITIALIZATION ---
+
+        /**
+         * Initializes the local application, loads data, and sets up the UI.
+         */
+        function initializeLocalApp() {
+            loadFiltersFromLocalStorage(); // Load UI state for filters first
+            loadFromLocalStorage();
+            isAuthReady = true;
+
+            document.getElementById('auth-status').innerHTML = `User ID: <span class="font-medium text-gray-700">${userId}</span> | <span class="text-secondary-yellow font-semibold">Local Storage Active</span>`;
+
+            // Initial render
+            renderAllViews();
+            changeView('dashboard');
+        }
+
+        function renderAllViews() {
+            const { livestock, transactions, production, tasks, inventory } = farmData;
+            renderDashboard(livestock, transactions, production, tasks, inventory);
+            // Other views are rendered on demand when their tab is clicked or data changes.
+        }
+        
+        // --- UI RENDERING AND LOGIC ---
+
+        /**
+         * Changes the active view/tab.
+         * @param {string} viewName - The name of the view to switch to.
+         */
+        window.changeView = function(viewName) {
+            document.querySelectorAll('.view-container').forEach(el => el.classList.add('hidden'));
+            document.getElementById(`view-${viewName}`).classList.remove('hidden');
+
+            document.querySelectorAll('[id^="tab-"]').forEach(el => el.classList.remove('active-tab'));
+            document.getElementById(`tab-${viewName}`).classList.add('active-tab');
+
+            // Explicitly destroy charts when leaving the finance view to avoid memory leaks
+            if (viewName !== 'finance') {
+                 if (expenseChart) { expenseChart.destroy(); expenseChart = null; }
+                 if (monthlyChart) { monthlyChart.destroy(); monthlyChart = null; }
+            }
+
+            // Render the content of the view when switching to it
+            if (viewName === 'livestock') renderLivestock(farmData.livestock);
+            if (viewName === 'finance') renderTransactions(farmData.transactions);
+            if (viewName === 'production') renderProduction(farmData.production);
+            if (viewName === 'tasks') renderTasks(farmData.tasks);
+            if (viewName === 'inventory') renderInventory(farmData.inventory);
+            if (viewName === 'dashboard') renderDashboard(farmData.livestock, farmData.transactions, farmData.production, farmData.tasks, farmData.inventory);
+        }
+
+        /**
+         * Renders the main Dashboard summary.
+         */
+        function renderDashboard(livestock, transactions, production, tasks, inventory) {
+            const container = document.getElementById('view-dashboard');
+
+            if (!isAuthReady) {
+                container.innerHTML = `<div class="p-6 text-center text-gray-500">Initializing local app...</div>`;
+                return;
+            }
+            
+            // Calculate 30-day production summary
+            const thirtyDaysAgo = new Date();
+            thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
+            const recentProduction = production.filter(p => new Date(p.date) >= thirtyDaysAgo);
+            
+            const productionSummary = recentProduction.reduce((acc, item) => {
+                const type = item.type.split(' ')[0];
+                const unit = item.type.split('(')[1].replace(')', '');
+                acc[type] = acc[type] || { total: 0, unit: unit };
+                acc[type].total += parseFloat(item.quantity);
+                return acc;
+            }, {});
+
+            let productionHtml = Object.entries(productionSummary)
+                .map(([type, data]) => `
+                    <div class="p-5 bg-card-bg border-l-4 border-secondary-yellow rounded-lg shadow-sm hover:shadow-md transition-shadow duration-200">
+                        <p class="text-sm text-gray-500 font-medium">${type} (Last 30 Days)</p>
+                        <p class="text-3xl font-bold text-gray-800 mt-1">${data.total.toLocaleString(undefined, { maximumFractionDigits: 1 })} <span class="text-xl text-secondary-yellow">${data.unit}</span></p>
+                    </div>
+                `).join('');
+
+            if (productionHtml === '') {
+                productionHtml = `
+                    <div class="md:col-span-3 p-6 bg-yellow-50/70 rounded-xl text-center border border-yellow-200/80">
+                        <p class="text-gray-600 font-medium">No production recorded in the last 30 days.</p>
+                        <p class="text-sm text-gray-500 italic">Start logging your yields in the Production tab.</p>
+                    </div>
+                `;
+            }
+
+            // 1. Livestock Summary
+            const livestockCounts = livestock.reduce((acc, item) => {
+                acc[item.type] = (acc[item.type] || 0) + item.count;
+                return acc;
+            }, {});
+            const totalAnimals = livestock.reduce((sum, item) => sum + item.count, 0);
+
+            let livestockHtml = Object.entries(livestockCounts)
+                .map(([type, count]) => `<span class="inline-flex items-center px-3 py-1 text-sm font-medium bg-primary-green/10 text-primary-green-dark rounded-full border border-primary-green/20">${type.charAt(0).toUpperCase() + type.slice(1)}: <span class="font-bold ml-1.5">${count}</span></span>`)
+                .join('');
+            
+            if (livestockHtml === '') {
+                livestockHtml = '<p class="text-gray-500 italic">No livestock records added yet.</p>';
+            }
+
+            // 2. Financial Summary
+            const totalIncome = transactions
+                .filter(t => t.type === 'income')
+                .reduce((sum, t) => sum + parseFloat(t.amount), 0);
+            
+            const totalExpense = transactions
+                .filter(t => t.type === 'expense')
+                .reduce((sum, t) => sum + parseFloat(t.amount), 0);
+
+            const netProfit = totalIncome - totalExpense;
+
+            const netColor = netProfit >= 0 ? 'text-green-600' : 'text-red-600';
+            const netBg = netProfit >= 0 ? 'bg-green-50' : 'bg-red-50';
+
+            // 3. Upcoming Tasks Summary
+            const upcomingTasks = tasks
+                .filter(t => t.status !== 'Done')
+                .sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate))
+                .slice(0, 3); // Get top 3
+
+            let tasksHtml = upcomingTasks.map(task => {
+                const isOverdue = new Date(task.dueDate) < new Date(new Date().toDateString()); // Compare date part only
+                const dateColor = isOverdue ? 'text-red-600 font-bold' : 'text-gray-600 font-medium';
+                return `
+                    <div class="flex items-center justify-between p-3 bg-gray-50/80 rounded-lg border border-gray-200/90 hover:bg-white transition-colors duration-200">
+                        <div>
+                            <p class="font-semibold text-gray-800">${task.title}</p>
+                            <p class="text-xs ${dateColor}">Due: ${task.dueDate}</p>
+                        </div>
+                        <span class="text-xs font-medium px-2 py-1 rounded-full ${task.priority === 'High' ? 'bg-red-100 text-red-700' : task.priority === 'Medium' ? 'bg-yellow-100 text-yellow-700' : 'bg-blue-100 text-blue-700'}">${task.priority}</span>
+                    </div>
+                `;
+            }).join('');
+
+            if (tasksHtml === '') {
+                tasksHtml = `<p class="text-center text-gray-500 italic py-4">No upcoming tasks. You're all caught up!</p>`;
+            }
+
+            // 4. Low Stock Alerts
+            const lowStockItems = inventory.filter(item => 
+                item.lowStockThreshold !== null && parseFloat(item.quantity) <= parseFloat(item.lowStockThreshold)
+            );
+
+            let lowStockHtml = lowStockItems.map(item => `
+                <div class="flex items-center justify-between p-3 bg-red-50/80 rounded-lg border border-red-200/90 hover:bg-red-100/50 transition-colors duration-200">
+                    <div>
+                        <p class="font-semibold text-red-800">${item.name}</p>
+                        <p class="text-xs text-red-600">Current: ${item.quantity} ${item.unit} | Alert Level: ${item.lowStockThreshold} ${item.unit}</p>
+                    </div>
+                    <button onclick="changeView('inventory')" class="text-xs font-medium text-blue-600 hover:underline">View</button>
+                </div>
+            `).join('');
+
+            const lowStockCard = lowStockItems.length > 0 ? `
+                <div class="bg-red-50/60 p-6 rounded-2xl shadow-md border-2 border-red-200/80 mb-10">
+                    <h3 class="text-xl font-semibold text-red-700 mb-4 flex items-center">
+                        <svg class="w-6 h-6 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                        Low Stock Alerts
+                    </h3>
+                    <div class="space-y-3">
+                        ${lowStockHtml}
+                    </div>
+                </div>
+            ` : '';
+
+
+            container.innerHTML = `
+                <h2 class="text-3xl font-bold text-gray-800 mb-8">Farm Dashboard</h2>
+                
+                ${lowStockCard}
+
+                <!-- Production Summary Card -->
+                <div class="bg-card-bg p-8 rounded-2xl shadow-lg border border-gray-200/80 mb-10">
+                    <h3 class="text-xl font-semibold text-gray-700 mb-5 flex items-center">
+                        <svg class="w-6 h-6 mr-3 text-secondary-yellow" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c1.657 0 3 .895 3 2s-1.343 2-3 2-3 .895-3 2 1.343 2 3 2m0-8V9a1 1 0 00-1-1h-2a1 1 0 00-1 1v1m0 4v1a1 1 0 001 1h2a1 1 0 001-1v-1m-4 0h4"></path></svg>
+                        Production & Yield Snapshot
+                    </h3>
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                        ${productionHtml}
+                    </div>
+                </div>
+
+                <!-- Multi-Card Section -->
+                <div class="grid grid-cols-1 lg:grid-cols-5 gap-10">
+                    <!-- Livestock Summary Card (lg:col-span-3) -->
+                    <div class="lg:col-span-3 bg-card-bg p-8 rounded-2xl shadow-lg border border-gray-200/80">
+                        <h3 class="text-xl font-semibold text-gray-700 mb-5 flex items-center">
+                            <svg class="w-6 h-6 mr-3 text-primary-green" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-4m0 0l-3 3m3-3l3 3m0 0V9a2 2 0 00-2-2H5a2 2 0 00-2 2v8l3-3m3-3v4m0 0l-3-3m3 3l3-3m0 0V9a2 2 0 012-2h4a2 2 0 012 2v8l-3-3m-3 3v-4"></path></svg>
+                            Livestock Overview
+                        </h3>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                            <div class="p-5 bg-primary-green/10 rounded-lg border-l-4 border-primary-green shadow-sm">
+                                <p class="text-sm text-gray-600 font-medium">Total Head Count</p>
+                                <p class="text-3xl font-bold text-gray-800 mt-1">${totalAnimals.toLocaleString()}</p>
+                            </div>
+                            <div class="p-5 bg-primary-green/10 rounded-lg border-l-4 border-primary-green shadow-sm">
+                                <p class="text-sm text-gray-600 font-medium">Unique Types Tracked</p>
+                                <p class="text-3xl font-bold text-gray-800 mt-1">${Object.keys(livestockCounts).length}</p>
+                            </div>
+                        </div>
+                        <p class="font-semibold text-gray-700 mb-3">Detailed Counts:</p>
+                        <div class="flex flex-wrap gap-3">
+                            ${livestockHtml}
+                        </div>
+                    </div>
+
+                    <!-- Upcoming Tasks Card (lg:col-span-2) -->
+                    <div class="lg:col-span-2 bg-card-bg p-8 rounded-2xl shadow-lg border border-gray-200/80">
+                        <h3 class="text-xl font-semibold text-gray-700 mb-5 flex items-center">
+                            <svg class="w-6 h-6 mr-3 text-secondary-yellow" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"></path></svg>
+                            Upcoming Tasks
+                        </h3>
+                        <div class="space-y-3">
+                            ${tasksHtml}
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Finance Summary Card -->
+                <div class="bg-card-bg p-8 rounded-2xl shadow-lg border border-gray-200/80 mt-10">
+                    <h3 class="text-xl font-semibold text-gray-700 mb-5 flex items-center">
+                        <svg class="w-6 h-6 mr-3 text-secondary-yellow" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M3 14h18m-9-4v8m-7 0h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"></path></svg>
+                        Financial Performance (All Time)
+                    </h3>
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-6 text-center">
+                        <div class="p-5 bg-green-50 rounded-lg border-l-4 border-green-500 shadow-sm">
+                            <p class="text-sm text-green-700 font-medium">Total Income</p>
+                            <p class="text-2xl font-bold text-green-600 mt-1">KSh ${totalIncome.toFixed(2).toLocaleString()}</p>
+                        </div>
+                        <div class="p-5 bg-red-50 rounded-lg border-l-4 border-red-500 shadow-sm">
+                            <p class="text-sm text-red-700 font-medium">Total Expenses</p>
+                            <p class="text-2xl font-bold text-red-600 mt-1">KSh ${totalExpense.toFixed(2).toLocaleString()}</p>
+                        </div>
+                        <div class="p-5 ${netBg} rounded-lg border-l-4 ${netProfit >= 0 ? 'border-green-500' : 'border-red-500'} shadow-sm">
+                            <p class="text-sm text-gray-700 font-medium">Net Profit/Loss</p>
+                            <p class="text-2xl font-bold ${netColor} mt-1">KSh ${netProfit.toFixed(2).toLocaleString()}</p>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        /**
+         * Renders the Livestock Management view. (Unchanged)
+         */
+        function renderLivestock(livestock) {
+            const container = document.getElementById('view-livestock');
+            const sortedLivestock = livestock.slice().sort((a, b) => a.type.localeCompare(b.type)); // Sort by type
+            
+            container.innerHTML = `
+                <h2 class="text-3xl font-bold text-gray-800 mb-8">Livestock Management</h2>
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                    <!-- Add Livestock Form -->
+                    <div class="lg:col-span-1 bg-card-bg p-8 rounded-2xl shadow-lg border border-gray-200/80 h-fit">
+                        <h3 class="text-xl font-bold mb-5 border-b pb-3 text-gray-800">Log New Head/Group</h3>
+                        <form id="add-livestock-form" onsubmit="event.preventDefault(); handleAddLivestock();">
+                            <div class="mb-4">
+                                <label for="livestock-type" class="block text-sm font-medium text-gray-700 mb-1">Type</label>
+                                <select id="livestock-type" required class="input-focus w-full p-3 border border-gray-300 rounded-lg focus:ring-primary-green focus:border-primary-green transition">
+                                    ${farmData.livestockTypes.map(t => `<option value="${t}">${t.charAt(0).toUpperCase() + t.slice(1)}</option>`).join('')}
+                                </select>
+                            </div>
+                            <div class="mb-4">
+                                <label for="livestock-count" class="block text-sm font-medium text-gray-700 mb-1">Quantity/Count</label>
+                                <input type="number" id="livestock-count" required min="1" value="1" class="input-focus w-full p-3 border border-gray-300 rounded-lg focus:ring-primary-green focus:border-primary-green transition">
+                            </div>
+                            <div class="mb-4">
+                                <label for="livestock-date" class="block text-sm font-medium text-gray-700 mb-1">Acquisition/Birth Date</label>
+                                <input type="date" id="livestock-date" required class="input-focus w-full p-3 border border-gray-300 rounded-lg focus:ring-primary-green focus:border-primary-green transition" value="${new Date().toISOString().substring(0, 10)}">
+                            </div>
+                            <div class="mb-6">
+                                <label for="livestock-notes" class="block text-sm font-medium text-gray-700 mb-1">Notes (e.g., breed, source)</label>
+                                <textarea id="livestock-notes" rows="3" class="input-focus w-full p-3 border border-gray-300 rounded-lg focus:ring-primary-green focus:border-primary-green transition"></textarea>
+                            </div>
+                            <button type="submit" class="w-full bg-primary-green text-white py-3 rounded-lg font-bold hover:bg-primary-green-dark transition shadow-md shadow-primary-green/40 transform hover:scale-[1.01]">Add Record</button>
+                            <p id="livestock-msg" class="text-center mt-3 text-sm font-medium"></p>
+                        </form>
+                    </div>
+
+                    <!-- Livestock List Table -->
+                    <div class="lg:col-span-2">
+                        <div class="flex justify-between items-center mb-5 pb-3 border-b">
+                            <h3 class="text-xl font-bold text-gray-800">Current Inventory Records (${sortedLivestock.length})</h3>
+                            <button onclick="exportToCsv(farmData.livestock, 'livestock-records.csv')" class="px-3 py-1.5 text-xs font-medium bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition flex items-center space-x-1">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+                                <span>Export CSV</span>
+                            </button>
+                        </div>
+                        <div class="bg-card-bg rounded-2xl shadow-lg overflow-hidden border border-gray-200/80">
+                            <div class="overflow-x-auto">
+                                <table class="min-w-full divide-y divide-gray-200">
+                                    <thead class="bg-gray-50">
+                                        <tr>
+                                            <th class="px-5 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Type</th>
+                                            <th class="px-5 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Count</th>
+                                            <th class="px-5 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Date</th>
+                                            <th class="px-5 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Notes</th>
+                                            <th class="px-5 py-3 text-right">Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody class="bg-white divide-y divide-gray-100">
+                                        ${sortedLivestock.length > 0 ? sortedLivestock.map(item => `
+                                            <tr class="hover:bg-gray-50/80 transition duration-150">
+                                                <td class="px-5 py-3 whitespace-nowrap text-sm font-semibold text-gray-800">${item.type.charAt(0).toUpperCase() + item.type.slice(1)}</td>
+                                                <td class="px-5 py-3 whitespace-nowrap text-sm text-gray-700 font-mono">${item.count.toLocaleString()}</td>
+                                                <td class="px-5 py-3 whitespace-nowrap text-sm text-gray-600">${item.date}</td>
+                                                <td class="px-5 py-3 text-sm text-gray-500 max-w-xs truncate">${item.notes || 'N/A'}</td>
+                                                <td class="px-5 py-3 whitespace-nowrap text-right text-sm font-medium space-x-2">
+                                                    <button onclick="window.openEditModal('${item.id}', 'livestock')" class="text-blue-600 hover:text-blue-800 transition p-1.5 rounded-full hover:bg-blue-100" title="Edit">
+                                                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-7-3l-4 4V14h3l4-4M16 5l3 3m-8 10h.01"></path></svg>
+                                                    </button>
+                                                    <button onclick="window.confirmDelete('${item.id}', 'livestock')" class="text-red-600 hover:text-red-800 transition p-1.5 rounded-full hover:bg-red-100" title="Delete">
+                                                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                                                    </button>
+                                                </td>
+                                            </tr>
+                                        `).join('') : `
+                                            <tr><td colspan="5" class="px-5 py-10 text-center text-gray-500 italic">No livestock records found. Use the form on the left to add your first entry.</td></tr>
+                                        `}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+        
+        /**
+         * Renders the detailed transaction list HTML.
+         */
+        function renderTransactionList(transactions) {
+            if (transactions.length === 0) {
+                return `<p class="text-center text-gray-500 italic py-10">No transactions match the current filter criteria.</p>`;
+            }
+            
+            return transactions.map(t => {
+                const isIncome = t.type === 'income';
+                const colorClass = isIncome ? 'text-green-700 bg-green-100 border-green-300' : 'text-red-700 bg-red-100 border-red-300';
+                const sign = isIncome ? '+' : '-';
+                return `
+                    <div class="flex justify-between items-center border-b border-gray-100 py-4 last:border-b-0 hover:bg-gray-50/80 transition duration-150 rounded-lg px-2 -mx-2">
+                        <div class="flex flex-col flex-1 min-w-0 pr-4">
+                            <span class="text-base font-semibold text-gray-800 truncate">${t.category}</span>
+                            <span class="text-xs text-gray-500 mt-0.5">${t.date} | ${t.notes || 'No detailed notes'}</span>
+                        </div>
+                        <div class="flex items-center space-x-3">
+                            <span class="font-bold text-sm ${colorClass} px-3 py-1.5 rounded-full min-w-[130px] text-center border font-mono">${sign}KSh ${parseFloat(t.amount).toFixed(2).toLocaleString()}</span>
+                            <button onclick="window.openEditModal('${t.id}', 'transactions')" class="text-blue-600 hover:text-blue-800 transition p-1.5 rounded-full hover:bg-blue-100" title="Edit">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-7-3l-4 4V14h3l4-4M16 5l3 3m-8 10h.01"></path></svg>
+                            </button>
+                            <button onclick="window.confirmDelete('${t.id}', 'transactions')" class="text-red-600 hover:text-red-800 transition p-1.5 rounded-full hover:bg-red-100" title="Delete">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                            </button>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        /**
+         * Calculates and renders the financial summary metrics (Income, Expense, Net).
+         */
+        function renderFinancialSummary(transactions) {
+            const totalIncome = transactions
+                .filter(t => t.type === 'income')
+                .reduce((sum, t) => sum + parseFloat(t.amount), 0);
+            
+            const totalExpense = transactions
+                .filter(t => t.type === 'expense')
+                .reduce((sum, t) => sum + parseFloat(t.amount), 0);
+
+            const netProfit = totalIncome - totalExpense;
+
+            const netColor = netProfit >= 0 ? 'text-green-600' : 'text-red-600';
+            const netBg = netProfit >= 0 ? 'bg-green-50' : 'bg-red-50';
+            const netBorder = netProfit >= 0 ? 'border-green-500' : 'border-red-500';
+
+            return `
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-6 text-center mt-4">
+                    <div class="p-5 bg-green-50 rounded-lg border-l-4 border-green-500 shadow-sm">
+                        <p class="text-sm text-green-700 font-medium">Total Income</p>
+                        <p class="text-2xl font-bold text-green-600 mt-1">KSh ${totalIncome.toFixed(2).toLocaleString()}</p>
+                    </div>
+                    <div class="p-5 bg-red-50 rounded-lg border-l-4 border-red-500 shadow-sm">
+                        <p class="text-sm text-red-700 font-medium">Total Expenses</p>
+                        <p class="text-2xl font-bold text-red-600 mt-1">KSh ${totalExpense.toFixed(2).toLocaleString()}</p>
+                    </div>
+                    <div class="p-5 ${netBg} rounded-lg border-l-4 ${netBorder} shadow-sm">
+                        <p class="text-sm text-gray-700 font-medium">Net Profit/Loss</p>
+                        <p class="text-2xl font-bold ${netColor} mt-1">KSh ${netProfit.toFixed(2).toLocaleString()}</p>
+                    </div>
+                </div>
+            `;
+        }
+
+        /**
+         * Applies filters to the raw transactions data.
+         */
+        function filterTransactions(transactions, filters) {
+            let filtered = transactions;
+
+            // Filter by Type
+            if (filters.type !== 'all') {
+                filtered = filtered.filter(t => t.type === filters.type);
+            }
+            
+            // Filter by Category (future use)
+            if (filters.category !== 'all') {
+                filtered = filtered.filter(t => t.category === filters.category);
+            }
+
+            // Filter by Date Range
+            if (filters.dateRange !== 'all') {
+                let startDate, endDate;
+                const now = new Date();
+                now.setHours(0, 0, 0, 0); // Normalize time
+
+                if (filters.dateRange === '30d') {
+                    startDate = new Date(now);
+                    startDate.setDate(now.getDate() - 30);
+                } else if (filters.dateRange === '90d') {
+                    startDate = new Date(now);
+                    startDate.setDate(now.getDate() - 90);
+                } else if (filters.dateRange === 'custom') {
+                    if (filters.startDate) {
+                        startDate = new Date(filters.startDate);
+                    }
+                    if (filters.endDate) {
+                        endDate = new Date(filters.endDate);
+                        endDate.setDate(endDate.getDate() + 1); // Include the entire end date
+                    }
+                }
+
+                filtered = filtered.filter(t => {
+                    const tDate = new Date(t.date);
+                    
+                    let passedStart = true;
+                    if (startDate) {
+                        passedStart = tDate >= startDate;
+                    }
+
+                    let passedEnd = true;
+                    if (endDate) {
+                        passedEnd = tDate < endDate;
+                    }
+
+                    return passedStart && passedEnd;
+                });
+            }
+
+            return filtered;
+        }
+
+        /**
+         * Updates the filter state and re-renders the finance view.
+         */
+        window.updateFinanceFilter = function(key, value) {
+            financeFilters[key] = value;
+            
+            // Handle custom date visibility
+            const startContainer = document.getElementById('custom-date-start-container');
+            const endContainer = document.getElementById('custom-date-end-container');
+            const startDateInput = document.getElementById('filter-start-date');
+            const endDateInput = document.getElementById('filter-end-date');
+
+
+            if (key === 'dateRange') {
+                if (value === 'custom') {
+                    startContainer?.classList.remove('hidden');
+                    endContainer?.classList.remove('hidden');
+                    // Reset custom date values if they were empty
+                    if (startDateInput && !financeFilters.startDate) financeFilters.startDate = startDateInput.value;
+                    if (endDateInput && !financeFilters.endDate) financeFilters.endDate = endDateInput.value;
+                } else {
+                    startContainer?.classList.add('hidden');
+                    endContainer?.classList.add('hidden');
+                    // Clear custom dates if switching away
+                    financeFilters.startDate = null;
+                    financeFilters.endDate = null;
+                }
+            }
+            
+            // If the inputs exist, ensure they reflect the latest state before re-render
+            if (key === 'startDate') financeFilters.startDate = value;
+            if (key === 'endDate') financeFilters.endDate = value;
+
+            // Persist the filter state to localStorage
+            localStorage.setItem('farmFinanceFilters', JSON.stringify(financeFilters));
+
+
+            // Re-render the finance view with new filters applied
+            renderTransactions(farmData.transactions);
+        }
+
+        /**
+         * Renders the Chart.js visualizations.
+         */
+        function renderCharts(transactions) {
+            // 1. Prepare Expense Pie Chart Data
+            const expenses = transactions.filter(t => t.type === 'expense');
+            const expenseData = expenses.reduce((acc, t) => {
+                acc[t.category] = (acc[t.category] || 0) + parseFloat(t.amount);
+                return acc;
+            }, {});
+
+            const expenseLabels = Object.keys(expenseData);
+            const expenseAmounts = Object.values(expenseData);
+            
+            const categoryColors = [
+                '#059669', '#10b981', '#34d399', '#f59e0b', '#fbbf24', 
+                '#f87171', '#ef4444', '#a855f7', '#8b5cf6', '#3b82f6', '#4f46e5', '#ec4899'
+            ];
+            
+            // Destroy previous instance
+            if (expenseChart) expenseChart.destroy();
+
+            const pieCtx = document.getElementById('expense-pie-chart')?.getContext('2d');
+            if (pieCtx && expenseAmounts.length > 0) {
+                expenseChart = new Chart(pieCtx, {
+                    type: 'doughnut',
+                    data: {
+                        labels: expenseLabels,
+                        datasets: [{
+                            data: expenseAmounts,
+                            backgroundColor: expenseLabels.map((_, i) => categoryColors[i % categoryColors.length]),
+                            borderColor: '#ffffff',
+                            borderWidth: 2
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: {
+                                position: 'right',
+                                labels: {
+                                    color: '#1f2937',
+                                    font: { family: 'Inter', size: 10 }
+                                }
+                            },
+                            tooltip: {
+                                callbacks: {
+                                    label: function(context) {
+                                        let label = context.label || '';
+                                        if (label) {
+                                            label += ': ';
+                                        }
+                                        label += 'KSh ' + context.parsed.toFixed(2).toLocaleString();
+                                        return label;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                });
+            } else if (pieCtx) {
+                 pieCtx.canvas.parentNode.innerHTML = '<p class="text-center text-gray-500 py-16">No expenses in this period to chart.</p>';
+            }
+
+
+            // 2. Prepare Monthly Performance Bar Chart Data (last 6 months)
+            const monthlyData = {};
+            const today = new Date();
+            
+            // Initialize data for the last 6 months
+            for (let i = 0; i < 6; i++) {
+                // Set to the first day of the month i months ago
+                const d = new Date(today.getFullYear(), today.getMonth() - i, 1);
+                const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+                const label = d.toLocaleString('en-US', { month: 'short', year: 'numeric' });
+                monthlyData[key] = { label, income: 0, expense: 0, net: 0 };
+            }
+
+            // Filter transactions that fall within the 6 month window
+            const sixMonthsAgo = new Date(today.getFullYear(), today.getMonth() - 5, 1);
+            const recentTransactions = transactions.filter(t => new Date(t.date) >= sixMonthsAgo);
+            
+            recentTransactions.forEach(t => {
+                const tDate = new Date(t.date);
+                const key = `${tDate.getFullYear()}-${String(tDate.getMonth() + 1).padStart(2, '0')}`;
+
+                if (monthlyData[key]) {
+                    const amount = parseFloat(t.amount);
+                    if (t.type === 'income') {
+                        monthlyData[key].income += amount;
+                    } else if (t.type === 'expense') {
+                        monthlyData[key].expense += amount;
+                    }
+                }
+            });
+
+            // Calculate net and sort chronologically
+            const sortedMonthlyData = Object.values(monthlyData)
+                .map(item => ({ ...item, net: item.income - item.expense }))
+                .sort((a, b) => {
+                    // Simple chronological sort based on label for accurate display
+                    const monthYearA = a.label.split(' ');
+                    const monthYearB = b.label.split(' ');
+                    const dateA = new Date(`${monthYearA[0]} 1, ${monthYearA[1]}`);
+                    const dateB = new Date(`${monthYearB[0]} 1, ${monthYearB[1]}`);
+                    return dateA - dateB;
+                });
+
+            const monthlyLabels = sortedMonthlyData.map(d => d.label);
+            const monthlyIncome = sortedMonthlyData.map(d => d.income);
+            const monthlyExpense = sortedMonthlyData.map(d => d.expense);
+
+            // Destroy previous instance
+            if (monthlyChart) monthlyChart.destroy();
+
+            const barCtx = document.getElementById('monthly-chart')?.getContext('2d');
+            if (barCtx && (monthlyIncome.some(v => v > 0) || monthlyExpense.some(v => v > 0))) {
+                monthlyChart = new Chart(barCtx, {
+                    type: 'bar',
+                    data: {
+                        labels: monthlyLabels,
+                        datasets: [
+                            {
+                                label: 'Income',
+                                data: monthlyIncome,
+                                backgroundColor: '#10b981', // Emerald green
+                                borderRadius: 4,
+                            },
+                            {
+                                label: 'Expense',
+                                data: monthlyExpense,
+                                backgroundColor: '#f87171', // Red
+                                borderRadius: 4,
+                            }
+                        ]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        scales: {
+                            x: { stacked: false, grid: { display: false } },
+                            y: {
+                                beginAtZero: true,
+                                stacked: false,
+                                title: { display: true, text: 'Amount (KSh)', color: '#4b5563' }
+                            }
+                        },
+                        plugins: {
+                            legend: { position: 'top' },
+                            tooltip: {
+                                callbacks: {
+                                    label: function(context) {
+                                        let label = context.dataset.label || '';
+                                        if (label) {
+                                            label += ': ';
+                                        }
+                                        label += 'KSh ' + context.parsed.y.toFixed(2).toLocaleString();
+                                        return label;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                });
+            } else if (barCtx) {
+                 barCtx.canvas.parentNode.innerHTML = '<p class="text-center text-gray-500 py-16">No transactions in the last 6 months to chart.</p>';
+            }
+        }
+
+
+        /**
+         * Renders the Finance (Inputs/Sales) view. (Updated)
+         */
+        function renderTransactions(transactions) {
+            const container = document.getElementById('view-finance');
+            
+            // --- 1. FILTER DATA ---
+            const filteredTransactions = filterTransactions(transactions, financeFilters);
+
+            // Set default date values if filter is custom but dates are null
+            const defaultStartDate = new Date(new Date().setDate(new Date().getDate() - 30)).toISOString().substring(0, 10);
+            const defaultEndDate = new Date().toISOString().substring(0, 10);
+
+            if (financeFilters.dateRange === 'custom' && !financeFilters.startDate) {
+                financeFilters.startDate = defaultStartDate;
+            }
+            if (financeFilters.dateRange === 'custom' && !financeFilters.endDate) {
+                financeFilters.endDate = defaultEndDate;
+            }
+
+
+            // --- 2. RENDER THE COMPLETE VIEW STRUCTURE ---
+            container.innerHTML = `
+                <h2 class="text-3xl font-bold text-gray-800 mb-8">Finance Tracking & Analytics</h2>
+                <div class="grid grid-cols-1 lg:grid-cols-4 gap-8">
+                    
+                    <!-- Add Transaction Form (lg:col-span-1) -->
+                    <div class="lg:col-span-1 bg-card-bg p-8 rounded-2xl shadow-lg border border-gray-200/80 h-fit">
+                        <h3 class="text-xl font-bold mb-5 border-b pb-3 text-gray-800">Record New Transaction</h3>
+                        <form id="add-transaction-form" onsubmit="event.preventDefault(); handleAddTransaction();">
+                            <div class="mb-4">
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Type</label>
+                                <select id="transaction-type" onchange="updateTransactionCategories('transaction-category')" required class="input-focus w-full p-3 border border-gray-300 rounded-lg focus:ring-primary-green focus:border-primary-green transition">
+                                    <option value="expense">Expense (Input)</option>
+                                    <option value="income">Income (Sale)</option>
+                                </select>
+                            </div>
+                            <div class="mb-4">
+                                <label for="transaction-category" class="block text-sm font-medium text-gray-700 mb-1">Category</label>
+                                <select id="transaction-category" required class="input-focus w-full p-3 border border-gray-300 rounded-lg focus:ring-primary-green focus:border-primary-green transition">
+                                    <!-- Options populated by JS -->
+                                </select>
+                            </div>
+                            <div class="mb-4">
+                                <label for="transaction-amount" class="block text-sm font-medium text-gray-700 mb-1">Amount (KSh)</label>
+                                <input type="number" id="transaction-amount" required min="0.01" step="0.01" placeholder="e.g., 500.00" class="input-focus w-full p-3 border border-gray-300 rounded-lg focus:ring-primary-green focus:border-primary-green transition">
+                            </div>
+                            <div class="mb-4">
+                                <label for="transaction-date" class="block text-sm font-medium text-gray-700 mb-1">Date</label>
+                                <input type="date" id="transaction-date" required class="input-focus w-full p-3 border border-gray-300 rounded-lg focus:ring-primary-green focus:border-primary-green transition" value="${new Date().toISOString().substring(0, 10)}">
+                            </div>
+                            <div class="mb-6">
+                                <label for="transaction-notes" class="block text-sm font-medium text-gray-700 mb-1">Notes (e.g., supplier, item quantity)</label>
+                                <textarea id="transaction-notes" rows="3" class="input-focus w-full p-3 border border-gray-300 rounded-lg focus:ring-primary-green focus:border-primary-green transition"></textarea>
+                            </div>
+                            <button type="submit" class="w-full bg-primary-green text-white py-3 rounded-lg font-bold hover:bg-primary-green-dark transition shadow-md shadow-primary-green/40 transform hover:scale-[1.01]">Record Transaction</button>
+                            <p id="transaction-msg" class="text-center mt-3 text-sm font-medium"></p>
+                        </form>
+                    </div>
+
+                    <!-- Financial Analytics Panel (lg:col-span-3) -->
+                    <div class="lg:col-span-3">
+                        <div class="bg-card-bg p-8 rounded-2xl shadow-lg border border-gray-200/80">
+                            <h3 class="text-xl font-bold mb-5 pb-3 border-b text-gray-800">Financial Overview</h3>
+                            
+                            <!-- Filter Controls -->
+                            <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+                                <div>
+                                    <label for="filter-type" class="block text-xs font-medium text-gray-600 mb-1">Type Filter</label>
+                                    <select id="filter-type" onchange="updateFinanceFilter('type', this.value)" class="input-focus w-full p-2 border border-gray-300 rounded-lg text-sm">
+                                        <option value="all">All Transactions</option>
+                                        <option value="income">Income Only</option>
+                                        <option value="expense">Expense Only</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label for="filter-date-range" class="block text-xs font-medium text-gray-600 mb-1">Time Period</label>
+                                    <select id="filter-date-range" onchange="updateFinanceFilter('dateRange', this.value)" class="input-focus w-full p-2 border border-gray-300 rounded-lg text-sm">
+                                        <option value="all">All Time</option>
+                                        <option value="30d">Last 30 Days</option>
+                                        <option value="90d">Last 90 Days</option>
+                                        <option value="custom">Custom Range</option>
+                                    </select>
+                                </div>
+                                <div id="custom-date-start-container" class="${financeFilters.dateRange === 'custom' ? '' : 'hidden'}">
+                                    <label for="filter-start-date" class="block text-xs font-medium text-gray-600 mb-1">Start Date</label>
+                                    <input type="date" id="filter-start-date" onchange="updateFinanceFilter('startDate', this.value)" class="input-focus w-full p-2 border border-gray-300 rounded-lg text-sm" value="${financeFilters.startDate || defaultStartDate}">
+                                </div>
+                                <div id="custom-date-end-container" class="${financeFilters.dateRange === 'custom' ? '' : 'hidden'}">
+                                    <label for="filter-end-date" class="block text-xs font-medium text-gray-600 mb-1">End Date</label>
+                                    <input type="date" id="filter-end-date" onchange="updateFinanceFilter('endDate', this.value)" class="input-focus w-full p-2 border border-gray-300 rounded-lg text-sm" value="${financeFilters.endDate || defaultEndDate}">
+                                </div>
+                            </div>
+
+                            <!-- Summary Metrics -->
+                            ${renderFinancialSummary(filteredTransactions)}
+
+                            <!-- Charts Area -->
+                            <div class="mt-8 grid grid-cols-1 xl:grid-cols-3 gap-6">
+                                <div class="xl:col-span-2 bg-gray-50/80 p-4 rounded-xl border border-gray-200/90">
+                                    <h4 class="font-semibold text-gray-700 mb-3 border-b pb-2">Monthly Performance (Last 6 Months)</h4>
+                                    <div class="h-64">
+                                        <canvas id="monthly-chart"></canvas>
+                                    </div>
+                                </div>
+                                <div class="xl:col-span-1 bg-gray-50/80 p-4 rounded-xl border border-gray-200/90">
+                                    <h4 class="font-semibold text-gray-700 mb-3 border-b pb-2">Expense Breakdown by Category</h4>
+                                    <div class="h-64">
+                                        <canvas id="expense-pie-chart"></canvas>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Transaction History List (Below Analytics) -->
+                <div class="mt-8">
+                    <h3 class="text-xl font-bold mb-5 pb-3 border-b text-gray-800">Transaction History (${filteredTransactions.length} Filtered Records)</h3>
+                    <div id="transaction-list-container-outer" class="bg-card-bg p-6 rounded-2xl shadow-lg border border-gray-200/80">
+                        <div id="transaction-list-container" class="h-[400px] overflow-y-auto">
+                            ${renderTransactionList(filteredTransactions)}
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            // Initialize/Update categories dropdown for the ADD form
+            updateTransactionCategories('transaction-category'); 
+            
+            // Set filter control values based on state
+            document.getElementById('filter-type').value = financeFilters.type;
+            document.getElementById('filter-date-range').value = financeFilters.dateRange;
+
+            // Render charts
+            renderCharts(filteredTransactions);
+        }
+        
+        /**
+         * Renders the Production Tracking view.
+         */
+        function renderProduction(production) {
+            const container = document.getElementById('view-production');
+            const sortedProduction = production.slice().sort((a, b) => new Date(b.date) - new Date(a.date)); // Sort by date descending
+            
+            container.innerHTML = `
+                <h2 class="text-3xl font-bold text-gray-800 mb-8">Production Tracking</h2>
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                    
+                    <!-- Add Production Form -->
+                    <div class="lg:col-span-1 bg-card-bg p-8 rounded-2xl shadow-lg border border-gray-200/80 h-fit">
+                        <h3 class="text-xl font-bold mb-5 border-b pb-3 text-gray-800">Log New Harvest/Yield</h3>
+                        <form id="add-production-form" onsubmit="event.preventDefault(); handleAddProduction();">
+                            <div class="mb-4">
+                                <label for="production-type" class="block text-sm font-medium text-gray-700 mb-1">Product Type</label>
+                                <select id="production-type" required class="input-focus w-full p-3 border border-gray-300 rounded-lg focus:ring-primary-green focus:border-primary-green transition">
+                                    ${farmData.productionTypes.map(t => `<option value="${t}">${t}</option>`).join('')}
+                                </select>
+                            </div>
+                            <div class="mb-4">
+                                <label for="production-quantity" class="block text-sm font-medium text-gray-700 mb-1">Quantity</label>
+                                <input type="number" id="production-quantity" required min="0.1" step="0.1" placeholder="e.g., 50.5" class="input-focus w-full p-3 border border-gray-300 rounded-lg focus:ring-primary-green focus:border-primary-green transition">
+                            </div>
+                            <div class="mb-4">
+                                <label for="production-date" class="block text-sm font-medium text-gray-700 mb-1">Harvest Date</label>
+                                <input type="date" id="production-date" required class="input-focus w-full p-3 border border-gray-300 rounded-lg focus:ring-primary-green focus:border-primary-green transition" value="${new Date().toISOString().substring(0, 10)}">
+                            </div>
+                            <div class="mb-6">
+                                <label for="production-notes" class="block text-sm font-medium text-gray-700 mb-1">Notes (e.g., area harvested, specific herd)</label>
+                                <textarea id="production-notes" rows="3" class="input-focus w-full p-3 border border-gray-300 rounded-lg focus:ring-primary-green focus:border-primary-green transition"></textarea>
+                            </div>
+                            <button type="submit" class="w-full bg-primary-green text-white py-3 rounded-lg font-bold hover:bg-primary-green-dark transition shadow-md shadow-primary-green/40 transform hover:scale-[1.01]">Log Production</button>
+                            <p id="production-msg" class="text-center mt-3 text-sm font-medium"></p>
+                        </form>
+                    </div>
+
+                    <!-- Production History List -->
+                    <div class="lg:col-span-2">
+                        <h3 class="text-xl font-bold mb-5 pb-3 border-b text-gray-800">Production History (${sortedProduction.length})</h3>
+                        <div id="production-list-container" class="bg-card-bg p-6 rounded-2xl shadow-lg border border-gray-200/80 h-[650px] overflow-y-auto">
+                            ${sortedProduction.length > 0 ? sortedProduction.map(p => {
+                                const [product, unit] = p.type.split(' (');
+                                const cleanUnit = unit.replace(')', '');
+
+                                return `
+                                    <div class="flex justify-between items-center border-b border-gray-100 py-4 last:border-b-0 hover:bg-gray-50/80 transition duration-150 rounded-lg px-2 -mx-2">
+                                        <div class="flex flex-col flex-1 min-w-0 pr-4">
+                                            <span class="text-base font-semibold text-gray-800 truncate">${product}</span>
+                                            <span class="text-xs text-gray-500 mt-0.5">${p.date} | ${p.notes || 'No detailed notes'}</span>
+                                        </div>
+                                        <div class="flex items-center space-x-3">
+                                            <span class="font-bold text-sm text-secondary-yellow bg-yellow-100 border border-yellow-300 px-3 py-1.5 rounded-full min-w-[130px] text-center font-mono">${parseFloat(p.quantity).toFixed(1)} ${cleanUnit}</span>
+                                            <button onclick="window.openEditModal('${p.id}', 'production')" class="text-blue-600 hover:text-blue-800 transition p-1.5 rounded-full hover:bg-blue-100" title="Edit">
+                                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-7-3l-4 4V14h3l4-4M16 5l3 3m-8 10h.01"></path></svg>
+                                            </button>
+                                            <button onclick="window.confirmDelete('${p.id}', 'production')" class="text-red-600 hover:text-red-800 transition p-1.5 rounded-full hover:bg-red-100" title="Delete">
+                                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                                            </button>
+                                        </div>
+                                    </div>
+                                `;
+                            }).join('') : `
+                                <p class="text-center text-gray-500 italic py-10">No production recorded yet. Use the form on the left to log your first harvest.</p>
+                            `}
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        /**
+         * Renders the Task & Schedule Planner view.
+         */
+        function renderTasks(tasks) {
+            const container = document.getElementById('view-tasks');
+            const sortedTasks = tasks.slice().sort((a, b) => {
+                // Sort by status first (To Do > In Progress > Done), then by due date
+                const statusOrder = { 'To Do': 0, 'In Progress': 1, 'Done': 2 };
+                if (statusOrder[a.status] !== statusOrder[b.status]) {
+                    return statusOrder[a.status] - statusOrder[b.status];
+                }
+                return new Date(a.dueDate) - new Date(b.dueDate);
+            });
+
+            const getPriorityClass = (priority) => {
+                switch (priority) {
+                    case 'High': return 'bg-red-100 text-red-700 border-red-300';
+                    case 'Medium': return 'bg-yellow-100 text-yellow-700 border-yellow-300';
+                    case 'Low': return 'bg-blue-100 text-blue-700 border-blue-300';
+                    default: return 'bg-gray-100 text-gray-700 border-gray-300';
+                }
+            };
+
+            const getStatusClass = (status) => {
+                switch (status) {
+                    case 'To Do': return 'bg-gray-200 text-gray-800';
+                    case 'In Progress': return 'bg-blue-200 text-blue-800';
+                    case 'Done': return 'bg-green-200 text-green-800 line-through';
+                    default: return 'bg-gray-200 text-gray-800';
+                }
+            };
+
+            container.innerHTML = `
+                <h2 class="text-3xl font-bold text-gray-800 mb-8">Task & Schedule Planner</h2>
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                    
+                    <!-- Add Task Form -->
+                    <div class="lg:col-span-1 bg-card-bg p-8 rounded-2xl shadow-lg border border-gray-200/80 h-fit">
+                        <h3 class="text-xl font-bold mb-5 border-b pb-3 text-gray-800">Add New Task</h3>
+                        <form id="add-task-form" onsubmit="event.preventDefault(); handleAddTask();">
+                            <div class="mb-4">
+                                <label for="task-title" class="block text-sm font-medium text-gray-700 mb-1">Task Title</label>
+                                <input type="text" id="task-title" required placeholder="e.g., Repair fence in West pasture" class="input-focus w-full p-3 border border-gray-300 rounded-lg focus:ring-primary-green focus:border-primary-green transition">
+                            </div>
+                            <div class="grid grid-cols-2 gap-4 mb-4">
+                                <div>
+                                    <label for="task-due-date" class="block text-sm font-medium text-gray-700 mb-1">Due Date</label>
+                                    <input type="date" id="task-due-date" required class="input-focus w-full p-3 border border-gray-300 rounded-lg focus:ring-primary-green focus:border-primary-green transition" value="${new Date().toISOString().substring(0, 10)}">
+                                </div>
+                                <div>
+                                    <label for="task-priority" class="block text-sm font-medium text-gray-700 mb-1">Priority</label>
+                                    <select id="task-priority" required class="input-focus w-full p-3 border border-gray-300 rounded-lg focus:ring-primary-green focus:border-primary-green transition">
+                                        ${farmData.taskPriorities.map(p => `<option value="${p}">${p}</option>`).join('')}
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="mb-6">
+                                <label for="task-notes" class="block text-sm font-medium text-gray-700 mb-1">Notes</label>
+                                <textarea id="task-notes" rows="3" class="input-focus w-full p-3 border border-gray-300 rounded-lg focus:ring-primary-green focus:border-primary-green transition"></textarea>
+                            </div>
+                            <button type="submit" class="w-full bg-primary-green text-white py-3 rounded-lg font-bold hover:bg-primary-green-dark transition shadow-md shadow-primary-green/40 transform hover:scale-[1.01]">Add Task</button>
+                            <p id="task-msg" class="text-center mt-3 text-sm font-medium"></p>
+                        </form>
+                    </div>
+
+                    <!-- Task List -->
+                    <div class="lg:col-span-2">
+                        <h3 class="text-xl font-bold mb-5 pb-3 border-b text-gray-800">Current Tasks (${sortedTasks.length})</h3>
+                        <div class="bg-card-bg p-6 rounded-2xl shadow-lg border border-gray-200/80">
+                            <div class="space-y-4">
+                                ${sortedTasks.length > 0 ? sortedTasks.map(task => `
+                                    <div class="flex items-start p-4 rounded-lg border ${task.status === 'Done' ? 'bg-gray-50/70 border-gray-200/80' : 'bg-white shadow-sm border-gray-200'} transition-all duration-200">
+                                        <div class="flex-grow min-w-0">
+                                            <p class="font-semibold text-gray-800 ${getStatusClass(task.status)}">${task.title}</p>
+                                            <div class="flex items-center space-x-3 text-xs text-gray-500 mt-1.5">
+                                                <span>Due: <span class="font-medium">${task.dueDate}</span></span>
+                                                <span class="w-1.5 h-1.5 bg-gray-300 rounded-full"></span>
+                                                <span>Priority: <span class="font-medium px-2 py-0.5 rounded-md border text-xs ${getPriorityClass(task.priority)}">${task.priority}</span></span>
+                                            </div>
+                                            ${task.notes ? `<p class="text-sm text-gray-600 mt-2 italic">"${task.notes}"</p>` : ''}
+                                        </div>
+                                        <div class="flex items-center space-x-2 ml-4 flex-shrink-0">
+                                            <select onchange="handleUpdateTaskStatus('${task.id}', this.value)" class="text-xs p-1 border border-gray-300 rounded-md">
+                                                ${farmData.taskStatuses.map(s => `<option value="${s}" ${task.status === s ? 'selected' : ''}>${s}</option>`).join('')}
+                                            </select>
+                                            <button onclick="window.openEditModal('${task.id}', 'tasks')" class="text-blue-600 hover:text-blue-800 transition p-1.5 rounded-full hover:bg-blue-100" title="Edit">
+                                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-7-3l-4 4V14h3l4-4M16 5l3 3m-8 10h.01"></path></svg>
+                                            </button>
+                                            <button onclick="window.confirmDelete('${task.id}', 'tasks')" class="text-red-600 hover:text-red-800 transition p-1.5 rounded-full hover:bg-red-100" title="Delete">
+                                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                                            </button>
+                                        </div>
+                                    </div>
+                                `).join('') : `
+                                    <p class="text-center text-gray-500 italic py-10">No tasks scheduled. Use the form on the left to add your first task.</p>
+                                `}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        /**
+         * Renders the Inventory Management view.
+         */
+        function renderInventory(inventory) {
+            const container = document.getElementById('view-inventory');
+            const sortedInventory = inventory.slice().sort((a, b) => a.name.localeCompare(b.name));
+
+            container.innerHTML = `
+                <h2 class="text-3xl font-bold text-gray-800 mb-8">Inventory Management</h2>
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                    <!-- Add Inventory Form -->
+                    <div class="lg:col-span-1 bg-card-bg p-8 rounded-2xl shadow-lg border border-gray-200/80 h-fit">
+                        <h3 class="text-xl font-bold mb-5 border-b pb-3 text-gray-800">Add New Item to Stock</h3>
+                        <form id="add-inventory-form" onsubmit="event.preventDefault(); handleAddInventory();">
+                            <div class="mb-4">
+                                <label for="inventory-name" class="block text-sm font-medium text-gray-700 mb-1">Item Name</label>
+                                <input type="text" id="inventory-name" required placeholder="e.g., Dairy Meal" class="input-focus w-full p-3 border border-gray-300 rounded-lg">
+                            </div>
+                            <div class="mb-4">
+                                <label for="inventory-category" class="block text-sm font-medium text-gray-700 mb-1">Category</label>
+                                <select id="inventory-category" required class="input-focus w-full p-3 border border-gray-300 rounded-lg">
+                                    ${farmData.inventoryCategories.map(c => `<option value="${c}">${c}</option>`).join('')}
+                                </select>
+                            </div>
+                            <div class="grid grid-cols-2 gap-4 mb-4">
+                                <div>
+                                    <label for="inventory-quantity" class="block text-sm font-medium text-gray-700 mb-1">Quantity</label>
+                                    <input type="number" id="inventory-quantity" required min="0" step="any" placeholder="e.g., 10" class="input-focus w-full p-3 border border-gray-300 rounded-lg">
+                                </div>
+                                <div>
+                                    <label for="inventory-unit" class="block text-sm font-medium text-gray-700 mb-1">Unit</label>
+                                    <input type="text" id="inventory-unit" required placeholder="e.g., kg, bags" class="input-focus w-full p-3 border border-gray-300 rounded-lg">
+                                </div>
+                            </div>
+                            <div class="mb-4">
+                                <label for="inventory-threshold" class="block text-sm font-medium text-gray-700 mb-1">Low Stock Alert At (Optional)</label>
+                                <input type="number" id="inventory-threshold" min="0" step="any" placeholder="e.g., 5" class="input-focus w-full p-3 border border-gray-300 rounded-lg">
+                            </div>
+                            <div class="mb-4">
+                                <label for="inventory-date" class="block text-sm font-medium text-gray-700 mb-1">Purchase/Stock Date</label>
+                                <input type="date" id="inventory-date" required class="input-focus w-full p-3 border border-gray-300 rounded-lg" value="${new Date().toISOString().substring(0, 10)}">
+                            </div>
+                            <div class="mb-6">
+                                <label for="inventory-notes" class="block text-sm font-medium text-gray-700 mb-1">Notes (e.g., supplier, expiry)</label>
+                                <textarea id="inventory-notes" rows="2" class="input-focus w-full p-3 border border-gray-300 rounded-lg"></textarea>
+                            </div>
+                            <button type="submit" class="w-full bg-primary-green text-white py-3 rounded-lg font-bold hover:bg-primary-green-dark transition shadow-md shadow-primary-green/40 transform hover:scale-[1.01]">Add to Inventory</button>
+                            <p id="inventory-msg" class="text-center mt-3 text-sm font-medium"></p>
+                        </form>
+                    </div>
+
+                    <!-- Inventory List Table -->
+                    <div class="lg:col-span-2">
+                        <h3 class="text-xl font-bold mb-5 pb-3 border-b text-gray-800">Current Stock (${sortedInventory.length})</h3>
+                        <div class="bg-card-bg rounded-2xl shadow-lg overflow-hidden border border-gray-200/80">
+                            <div class="overflow-x-auto">
+                                <table class="min-w-full divide-y divide-gray-200">
+                                    <thead class="bg-gray-50">
+                                        <tr>
+                                            <th class="px-5 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Item Name</th>
+                                            <th class="px-5 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Category</th>
+                                            <th class="px-5 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Quantity</th>
+                                            <th class="px-5 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Stock Date</th>
+                                            <th class="px-5 py-3 text-right">Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody class="bg-white divide-y divide-gray-100">
+                                        ${sortedInventory.length > 0 ? sortedInventory.map(item => `
+                                            <tr class="hover:bg-gray-50/80 transition duration-150">
+                                                <td class="px-5 py-3 whitespace-nowrap">
+                                                    <div class="text-sm font-semibold text-gray-800">${item.name}</div>
+                                                    <div class="text-xs text-gray-500">
+                                                        ${item.lowStockThreshold !== null 
+                                                            ? `<span class="font-medium text-red-600">Alert at: ${item.lowStockThreshold}</span>` 
+                                                            : 'No alert set'}
+                                                    </div>
+                                                </td>
+                                                <td class="px-5 py-3 whitespace-nowrap text-sm text-gray-600">${item.category}</td>
+                                                <td class="px-5 py-3 whitespace-nowrap text-sm text-gray-800 font-mono font-semibold">${parseFloat(item.quantity).toLocaleString()} <span class="text-gray-500 font-sans font-normal">${item.unit}</span></td>
+                                                <td class="px-5 py-3 whitespace-nowrap text-sm text-gray-600">${item.date}</td>
+                                                <td class="px-5 py-3 whitespace-nowrap text-right text-sm font-medium space-x-2">
+                                                    <button onclick="window.openEditModal('${item.id}', 'inventory')" class="text-blue-600 hover:text-blue-800 transition p-1.5 rounded-full hover:bg-blue-100" title="Edit">
+                                                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-7-3l-4 4V14h3l4-4M16 5l3 3m-8 10h.01"></path></svg>
+                                                    </button>
+                                                    <button onclick="window.confirmDelete('${item.id}', 'inventory')" class="text-red-600 hover:text-red-800 transition p-1.5 rounded-full hover:bg-red-100" title="Delete">
+                                                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                                                    </button>
+                                                </td>
+                                            </tr>
+                                        `).join('') : `
+                                            <tr><td colspan="5" class="px-5 py-10 text-center text-gray-500 italic">No inventory items found. Use the form on the left to add your first item.</td></tr>
+                                        `}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        /**
+         * Updates the Category dropdown based on the selected Transaction Type (Income/Expense).
+         * @param {string} categoryId - The ID of the category dropdown to update.
+         * @param {string} selectedCategory - Optional existing category to pre-select.
+         * @param {string} typeId - The ID of the transaction type dropdown.
+         */
+        window.updateTransactionCategories = function(categoryId, selectedCategory = null, typeId = 'transaction-type') {
+            const typeSelect = document.getElementById(typeId);
+            const categorySelect = document.getElementById(categoryId);
+            if (!typeSelect || !categorySelect) return;
+
+            const selectedType = typeSelect.value;
+            const categories = farmData.transactionCategories[selectedType] || [];
+
+            categorySelect.innerHTML = categories
+                .map(cat => `<option value="${cat}" ${selectedCategory === cat ? 'selected' : ''}>${cat}</option>`)
+                .join('');
+        }
+
+        // --- CRUD OPERATIONS (LOCAL) ---
+
+        /**
+         * Retrieves a record by ID and collection name.
+         * @param {string} id 
+         * @param {string} collectionName 
+         * @returns {Object|undefined} The record object.
+         */
+        function getRecordById(id, collectionName) {
+            return farmData[collectionName].find(item => item.id === id);
+        }
+
+        /**
+         * Handles the submission of the Add Livestock form.
+         */
+        window.handleAddLivestock = function() {
+            const type = document.getElementById('livestock-type').value;
+            const count = parseInt(document.getElementById('livestock-count').value);
+            const date = document.getElementById('livestock-date').value;
+            const notes = document.getElementById('livestock-notes').value.trim();
+            const msgEl = document.getElementById('livestock-msg');
+
+            if (!type || isNaN(count) || count <= 0 || !date) {
+                msgEl.textContent = 'Please fill all required fields correctly.';
+                msgEl.className = 'text-center mt-3 text-sm text-red-500 font-medium';
+                return;
+            }
+
+            const record = { 
+                id: Date.now().toString(),
+                type, 
+                count, 
+                date, 
+                notes, 
+                createdAt: new Date().toISOString() 
+            };
+            
+            try {
+                farmData.livestock.push(record);
+                saveToLocalStorage();
+                renderLivestock(farmData.livestock); // Re-render only the affected view
+
+                msgEl.textContent = `${count.toLocaleString()} ${type} added successfully!`;
+                msgEl.className = 'text-center mt-3 text-sm text-green-600 font-medium';
+                document.getElementById('add-livestock-form').reset();
+                document.getElementById('livestock-date').value = new Date().toISOString().substring(0, 10);
+                setTimeout(() => msgEl.textContent = '', 3000);
+            } catch (error) {
+                console.error("Error adding livestock:", error);
+                msgEl.textContent = `Error: Failed to save record locally.`;
+                msgEl.className = 'text-center mt-3 text-sm text-red-500 font-medium';
+            }
+        }
+
+        /**
+         * Handles the submission of the Add Transaction form.
+         */
+        window.handleAddTransaction = function() {
+            const type = document.getElementById('transaction-type').value;
+            const category = document.getElementById('transaction-category').value;
+            const amount = parseFloat(document.getElementById('transaction-amount').value);
+            const date = document.getElementById('transaction-date').value;
+            const notes = document.getElementById('transaction-notes').value.trim();
+            const msgEl = document.getElementById('transaction-msg');
+
+            if (!type || !category || isNaN(amount) || amount <= 0 || !date) {
+                msgEl.textContent = 'Please fill all required fields correctly.';
+                msgEl.className = 'text-center mt-3 text-sm text-red-500 font-medium';
+                return;
+            }
+
+            const record = { 
+                id: Date.now().toString(),
+                type, 
+                category, 
+                amount, 
+                date, 
+                notes, 
+                createdAt: new Date().toISOString() 
+            };
+            
+            try {
+                farmData.transactions.push(record);
+                farmData.transactions.sort((a, b) => new Date(b.date) - new Date(a.date));
+                
+                saveToLocalStorage();
+                renderTransactions(farmData.transactions); // Re-render only the affected view
+
+                msgEl.textContent = `${type.toUpperCase()} of KSh ${amount.toFixed(2).toLocaleString()} recorded successfully!`;
+                msgEl.className = 'text-center mt-3 text-sm text-green-600 font-medium';
+                document.getElementById('add-transaction-form').reset();
+                document.getElementById('transaction-date').value = new Date().toISOString().substring(0, 10);
+                setTimeout(() => msgEl.textContent = '', 3000);
+            } catch (error) {
+                console.error("Error adding transaction:", error);
+                msgEl.textContent = `Error: Failed to save record locally.`;
+                msgEl.className = 'text-center mt-3 text-sm text-red-500 font-medium';
+            }
+        }
+        
+        /**
+         * Handles the submission of the Add Production form.
+         */
+        window.handleAddProduction = function() {
+            const type = document.getElementById('production-type').value;
+            const quantity = parseFloat(document.getElementById('production-quantity').value);
+            const date = document.getElementById('production-date').value;
+            const notes = document.getElementById('production-notes').value.trim();
+            const msgEl = document.getElementById('production-msg');
+
+            if (!type || isNaN(quantity) || quantity <= 0 || !date) {
+                msgEl.textContent = 'Please fill all required fields correctly.';
+                msgEl.className = 'text-center mt-3 text-sm text-red-500 font-medium';
+                return;
+            }
+
+            const record = { 
+                id: Date.now().toString(),
+                type, 
+                quantity, 
+                date, 
+                notes, 
+                createdAt: new Date().toISOString() 
+            };
+            
+            try {
+                farmData.production.push(record);
+                farmData.production.sort((a, b) => new Date(b.date) - new Date(a.date));
+                
+                saveToLocalStorage();
+                renderProduction(farmData.production); // Re-render only the affected view
+
+                const unit = type.split('(')[1].replace(')', '');
+                msgEl.textContent = `${quantity.toFixed(1).toLocaleString()} ${unit} of ${type.split(' ')[0]} logged successfully!`;
+                msgEl.className = 'text-center mt-3 text-sm text-green-600 font-medium';
+                document.getElementById('add-production-form').reset();
+                document.getElementById('production-date').value = new Date().toISOString().substring(0, 10);
+                setTimeout(() => msgEl.textContent = '', 3000);
+            } catch (error) {
+                console.error("Error adding production:", error);
+                msgEl.textContent = `Error: Failed to save production record locally.`;
+                msgEl.className = 'text-center mt-3 text-sm text-red-500 font-medium';
+            }
+        }
+
+        /**
+         * Handles the submission of the Add Task form.
+         */
+        window.handleAddTask = function() {
+            const title = document.getElementById('task-title').value.trim();
+            const dueDate = document.getElementById('task-due-date').value;
+            const priority = document.getElementById('task-priority').value;
+            const notes = document.getElementById('task-notes').value.trim();
+            const msgEl = document.getElementById('task-msg');
+
+            if (!title || !dueDate || !priority) {
+                msgEl.textContent = 'Please fill all required fields.';
+                msgEl.className = 'text-center mt-3 text-sm text-red-500 font-medium';
+                return;
+            }
+
+            const record = { 
+                id: Date.now().toString(),
+                title, 
+                dueDate, 
+                priority, 
+                notes, 
+                status: 'To Do', // Default status
+                createdAt: new Date().toISOString() 
+            };
+            
+            try {
+                farmData.tasks.push(record);
+                saveToLocalStorage();
+                renderTasks(farmData.tasks); // Re-render only the affected view
+
+                msgEl.textContent = `Task added successfully!`;
+                msgEl.className = 'text-center mt-3 text-sm text-green-600 font-medium';
+                document.getElementById('add-task-form').reset();
+                document.getElementById('task-due-date').value = new Date().toISOString().substring(0, 10);
+                setTimeout(() => msgEl.textContent = '', 3000);
+            } catch (error) {
+                console.error("Error adding task:", error);
+                msgEl.textContent = `Error: Failed to save task locally.`;
+                msgEl.className = 'text-center mt-3 text-sm text-red-500 font-medium';
+            }
+        }
+
+        /**
+         * Handles the submission of the Add Inventory form.
+         */
+        window.handleAddInventory = function() {
+            const name = document.getElementById('inventory-name').value.trim();
+            const category = document.getElementById('inventory-category').value;
+            const quantity = parseFloat(document.getElementById('inventory-quantity').value);
+            const unit = document.getElementById('inventory-unit').value.trim();
+            const date = document.getElementById('inventory-date').value;
+            const threshold = document.getElementById('inventory-threshold').value;
+            const notes = document.getElementById('inventory-notes').value.trim();
+            const msgEl = document.getElementById('inventory-msg');
+
+            if (!name || !category || isNaN(quantity) || quantity < 0 || !unit || !date) {
+                msgEl.textContent = 'Please fill all required fields correctly.';
+                msgEl.className = 'text-center mt-3 text-sm text-red-500 font-medium';
+                return;
+            }
+
+            const record = { 
+                id: Date.now().toString(),
+                name, 
+                category, 
+                quantity, 
+                unit, 
+                date, 
+                lowStockThreshold: threshold ? parseFloat(threshold) : null,
+                notes, 
+                createdAt: new Date().toISOString() 
+            };
+            
+            try {
+                farmData.inventory.push(record);
+                saveToLocalStorage();
+                renderInventory(farmData.inventory); // Re-render only the affected view
+
+                msgEl.textContent = `Item '${name}' added successfully!`;
+                msgEl.className = 'text-center mt-3 text-sm text-green-600 font-medium';
+                document.getElementById('add-inventory-form').reset();
+                document.getElementById('inventory-date').value = new Date().toISOString().substring(0, 10);
+                setTimeout(() => msgEl.textContent = '', 3000);
+            } catch (error) {
+                console.error("Error adding inventory item:", error);
+                msgEl.textContent = `Error: Failed to save item locally.`;
+                msgEl.className = 'text-center mt-3 text-sm text-red-500 font-medium';
+            }
+        }
+
+
+        // --- DELETE MODAL HANDLERS ---
+
+        /**
+         * Displays a confirmation modal before deleting a record.
+         */
+        window.confirmDelete = function(id, collectionName) {
+            const modal = document.getElementById('delete-modal-backdrop');
+            const message = document.getElementById('delete-modal-message');
+            const modalContent = document.getElementById('delete-modal-content');
+            const confirmBtn = document.getElementById('delete-modal-confirm-btn');
+
+            message.textContent = `Are you sure you want to permanently delete this ${collectionName.slice(0, -1)} record? This action cannot be undone.`;
+            
+            // Re-clone the button to remove old event listeners
+            const newConfirmBtn = confirmBtn.cloneNode(true);
+            confirmBtn.parentNode.replaceChild(newConfirmBtn, confirmBtn);
+
+            // Bind the local delete handler
+            newConfirmBtn.onclick = () => handleDelete(id, collectionName);
+
+            modal.classList.remove('hidden');
+            setTimeout(() => {
+                modalContent.classList.remove('scale-95', 'opacity-0');
+                modalContent.classList.add('scale-100', 'opacity-100');
+            }, 10); // Small delay to allow transition
+        }
+
+        /**
+         * Performs the actual delete operation in local storage.
+         */
+        function handleDelete(id, collectionName) {
+            window.closeModal('delete');
+            try {
+                farmData[collectionName] = farmData[collectionName].filter(item => item.id !== id);
+                
+                saveToLocalStorage();
+                window.changeView(collectionName); // Re-render the current view
+            } catch (error) {
+                console.error(`Error deleting record ${id}:`, error);
+            }
+        }
+
+
+        // --- EDIT MODAL HANDLERS (NEW) ---
+
+        /**
+         * Generates the dynamic form content for the edit modal based on the record type.
+         */
+        function generateEditForm(record, collectionName) {
+            const id = record.id;
+            const recordType = collectionName.slice(0, -1).charAt(0).toUpperCase() + collectionName.slice(0, -1).slice(1);
+            let formHtml = '';
+
+            const input = (id, label, type, value, step = null) => `
+                <div class="mb-4">
+                    <label for="${id}" class="block text-sm font-medium text-gray-700 mb-1">${label}</label>
+                    <input type="${type}" id="${id}" name="${id}" required 
+                           class="input-focus w-full p-3 border border-gray-300 rounded-lg focus:ring-primary-green focus:border-primary-green transition" 
+                           value="${value}" ${step ? `step="${step}"` : ''}>
+                </div>
+            `;
+            
+            const select = (id, label, options, selectedValue, onChangeHandler = '') => {
+                const optionsHtml = options.map(opt => {
+                    const value = opt.value || opt;
+                    const text = opt.text || (opt.charAt(0).toUpperCase() + opt.slice(1));
+                    return `<option value="${value}" ${selectedValue === value ? 'selected' : ''}>${text}</option>`;
+                }).join('');
+
+                return `
+                    <div class="mb-4">
+                        <label for="${id}" class="block text-sm font-medium text-gray-700 mb-1">${label}</label>
+                        <select id="${id}" name="${id}" required 
+                                ${onChangeHandler ? `onchange="${onChangeHandler}"` : ''}
+                                class="input-focus w-full p-3 border border-gray-300 rounded-lg focus:ring-primary-green focus:border-primary-green transition">
+                            ${optionsHtml}
+                        </select>
+                    </div>
+                `;
+            };
+
+            const textarea = (id, label, value) => `
+                <div class="mb-6">
+                    <label for="${id}" class="block text-sm font-medium text-gray-700 mb-1">${label}</label>
+                    <textarea id="${id}" name="${id}" rows="3" class="input-focus w-full p-3 border border-gray-300 rounded-lg focus:ring-primary-green focus:border-primary-green transition">${value || ''}</textarea>
+                </div>
+            `;
+
+            switch (collectionName) {
+                case 'livestock':
+                    formHtml = `
+                        ${select('edit-livestock-type', 'Type', farmData.livestockTypes, record.type)}
+                        ${input('edit-livestock-count', 'Quantity/Count', 'number', record.count, 1)}
+                        ${input('edit-livestock-date', 'Acquisition/Birth Date', 'date', record.date)}
+                        ${textarea('edit-livestock-notes', 'Notes (e.g., breed, source)', record.notes)}
+                        <input type="hidden" id="edit-record-id" value="${id}">
+                        <input type="hidden" id="edit-collection-name" value="${collectionName}">
+                    `;
+                    break;
+
+                case 'transactions':
+                    const typeOptions = [
+                        { value: 'expense', text: 'Expense (Input)' },
+                        { value: 'income', text: 'Income (Sale)' }
+                    ];
+
+                    const categoryHtml = `
+                        ${select('edit-transaction-type', 'Transaction Type', typeOptions, record.type, `updateTransactionCategories('edit-transaction-category', null, 'edit-transaction-type')`)}
+                        <div class="mb-4">
+                            <label for="edit-transaction-category" class="block text-sm font-medium text-gray-700 mb-1">Category</label>
+                            <select id="edit-transaction-category" name="edit-transaction-category" required class="input-focus w-full p-3 border border-gray-300 rounded-lg focus:ring-primary-green focus:border-primary-green transition">
+                                <!-- Populated dynamically -->
+                            </select>
+                        </div>
+                    `;
+
+                    formHtml = `
+                        ${categoryHtml}
+                        ${input('edit-transaction-amount', 'Amount (KSh)', 'number', record.amount, 0.01)}
+                        ${input('edit-transaction-date', 'Date', 'date', record.date)}
+                        ${textarea('edit-transaction-notes', 'Notes (e.g., supplier, item quantity)', record.notes)}
+                        <input type="hidden" id="edit-record-id" value="${id}">
+                        <input type="hidden" id="edit-collection-name" value="${collectionName}">
+                    `;
+                    
+                    // Delay category update to ensure DOM is ready
+                    setTimeout(() => {
+                        updateTransactionCategories('edit-transaction-category', record.category, 'edit-transaction-type');
+                    }, 0);
+                    
+                    break;
+
+                case 'production':
+                    formHtml = `
+                        ${select('edit-production-type', 'Product Type', farmData.productionTypes, record.type)}
+                        ${input('edit-production-quantity', 'Quantity', 'number', record.quantity, 0.1)}
+                        ${input('edit-production-date', 'Harvest Date', 'date', record.date)}
+                        ${textarea('edit-production-notes', 'Notes (e.g., area harvested, specific herd)', record.notes)}
+                        <input type="hidden" id="edit-record-id" value="${id}">
+                        <input type="hidden" id="edit-collection-name" value="${collectionName}">
+                    `;
+                    break;
+                
+                case 'tasks':
+                    formHtml = `
+                        ${input('edit-task-title', 'Task Title', 'text', record.title)}
+                        <div class="grid grid-cols-2 gap-4">
+                            ${input('edit-task-due-date', 'Due Date', 'date', record.dueDate)}
+                            ${select('edit-task-priority', 'Priority', farmData.taskPriorities, record.priority)}
+                        </div>
+                        ${select('edit-task-status', 'Status', farmData.taskStatuses, record.status)}
+                        ${textarea('edit-task-notes', 'Notes', record.notes)}
+                        <input type="hidden" id="edit-record-id" value="${id}">
+                        <input type="hidden" id="edit-collection-name" value="${collectionName}">
+                    `;
+                    break;
+
+                case 'inventory':
+                    formHtml = `
+                        ${input('edit-inventory-name', 'Item Name', 'text', record.name)}
+                        ${select('edit-inventory-category', 'Category', farmData.inventoryCategories, record.category)}
+                        <div class="grid grid-cols-2 gap-4">
+                            ${input('edit-inventory-quantity', 'Quantity', 'number', record.quantity, 'any')}
+                            ${input('edit-inventory-unit', 'Unit', 'text', record.unit)}
+                        </div>
+                        ${input('edit-inventory-threshold', 'Low Stock Alert At (Optional)', 'number', record.lowStockThreshold, 'any')}
+                        ${input('edit-inventory-date', 'Purchase/Stock Date', 'date', record.date)}
+                        ${textarea('edit-inventory-notes', 'Notes (e.g., supplier, expiry)', record.notes)}
+                        <input type="hidden" id="edit-record-id" value="${id}">
+                        <input type="hidden" id="edit-collection-name" value="${collectionName}">
+                    `;
+                    break;
+            }
+
+            return { html: formHtml, title: `Edit ${recordType} Record` };
+        }
+
+        /**
+         * Opens the dedicated modal for editing a record.
+         */
+        window.openEditModal = function(id, collectionName) {
+            const record = getRecordById(id, collectionName);
+            if (!record) {
+                console.error(`Record with ID ${id} not found in ${collectionName}`);
+                return;
+            }
+
+            currentEditingRecord = { id, collectionName };
+
+            const { html, title } = generateEditForm(record, collectionName);
+            const modal = document.getElementById('edit-modal-backdrop');
+            const modalContent = document.getElementById('edit-modal-content');
+
+            document.getElementById('edit-form-content').innerHTML = html;
+            document.getElementById('edit-modal-title').textContent = title;
+            document.getElementById('edit-msg').textContent = '';
+            document.getElementById('edit-msg').classList.add('hidden');
+
+            modal.classList.remove('hidden');
+            setTimeout(() => {
+                modalContent.classList.remove('scale-95', 'opacity-0');
+                modalContent.classList.add('scale-100', 'opacity-100');
+            }, 10); // Small delay to allow transition
+        }
+
+
+        /**
+         * Handles the form submission within the edit modal to update the record.
+         */
+        window.handleUpdateRecord = function() {
+            const { id, collectionName } = currentEditingRecord;
+            const record = getRecordById(id, collectionName);
+            if (!record) return;
+
+            const msgEl = document.getElementById('edit-msg');
+            msgEl.classList.remove('hidden', 'text-green-600', 'text-red-500');
+
+            try {
+                let updated = false;
+                // Update logic based on collection type
+                switch (collectionName) {
+                    case 'livestock':
+                        const lType = document.getElementById('edit-livestock-type').value;
+                        const lCount = parseInt(document.getElementById('edit-livestock-count').value);
+                        const lDate = document.getElementById('edit-livestock-date').value;
+                        const lNotes = document.getElementById('edit-livestock-notes').value.trim();
+
+                        if (lType && !isNaN(lCount) && lCount > 0 && lDate) {
+                            record.type = lType;
+                            record.count = lCount;
+                            record.date = lDate;
+                            record.notes = lNotes;
+                            updated = true;
+                        }
+                        break;
+
+                    case 'transactions':
+                        const tType = document.getElementById('edit-transaction-type').value;
+                        const tCategory = document.getElementById('edit-transaction-category').value;
+                        const tAmount = parseFloat(document.getElementById('edit-transaction-amount').value);
+                        const tDate = document.getElementById('edit-transaction-date').value;
+                        const tNotes = document.getElementById('edit-transaction-notes').value.trim();
+
+                        if (tType && tCategory && !isNaN(tAmount) && tAmount > 0 && tDate) {
+                            record.type = tType;
+                            record.category = tCategory;
+                            record.amount = tAmount;
+                            record.date = tDate;
+                            record.notes = tNotes;
+                            updated = true;
+                        }
+                        break;
+                    
+                    case 'production':
+                        const pType = document.getElementById('edit-production-type').value;
+                        const pQuantity = parseFloat(document.getElementById('edit-production-quantity').value);
+                        const pDate = document.getElementById('edit-production-date').value;
+                        const pNotes = document.getElementById('edit-production-notes').value.trim();
+
+                        if (pType && !isNaN(pQuantity) && pQuantity > 0 && pDate) {
+                            record.type = pType;
+                            record.quantity = pQuantity;
+                            record.date = pDate;
+                            record.notes = pNotes;
+                            updated = true;
+                        }
+                        break;
+                    
+                    case 'tasks':
+                        const taskTitle = document.getElementById('edit-task-title').value.trim();
+                        const taskDueDate = document.getElementById('edit-task-due-date').value;
+                        const taskPriority = document.getElementById('edit-task-priority').value;
+                        const taskStatus = document.getElementById('edit-task-status').value;
+                        const taskNotes = document.getElementById('edit-task-notes').value.trim();
+
+                        if (taskTitle && taskDueDate && taskPriority && taskStatus) {
+                            record.title = taskTitle;
+                            record.dueDate = taskDueDate;
+                            record.priority = taskPriority;
+                            record.status = taskStatus;
+                            record.notes = taskNotes;
+                            updated = true;
+                        }
+                        break;
+                    
+                    case 'inventory':
+                        const invName = document.getElementById('edit-inventory-name').value.trim();
+                        const invCategory = document.getElementById('edit-inventory-category').value;
+                        const invQuantity = parseFloat(document.getElementById('edit-inventory-quantity').value);
+                        const invUnit = document.getElementById('edit-inventory-unit').value.trim();
+                        const invDate = document.getElementById('edit-inventory-date').value;
+                        const invThreshold = document.getElementById('edit-inventory-threshold').value;
+                        const invNotes = document.getElementById('edit-inventory-notes').value.trim();
+
+                        if (invName && invCategory && !isNaN(invQuantity) && invQuantity >= 0 && invUnit && invDate) {
+                            record.name = invName;
+                            record.category = invCategory;
+                            record.quantity = invQuantity;
+                            record.lowStockThreshold = invThreshold ? parseFloat(invThreshold) : null;
+                            record.unit = invUnit;
+                            record.date = invDate;
+                            record.notes = invNotes;
+                            updated = true;
+                        }
+                        break;
+                }
+
+                if (updated) {
+                    saveToLocalStorage();
+                    window.changeView(collectionName); // Re-render the current view to show changes
+                    msgEl.textContent = 'Record updated successfully!';
+                    msgEl.className = 'text-center mt-4 text-sm text-green-600 font-medium';
+                    setTimeout(() => window.closeModal('edit'), 1000);
+                } else {
+                    msgEl.textContent = 'Validation error: Please check all fields.';
+                    msgEl.className = 'text-center mt-4 text-sm text-red-500 font-medium';
+                }
+
+            } catch (error) {
+                console.error("Error updating record:", error);
+                msgEl.textContent = `Error: Failed to update record locally.`;
+                msgEl.className = 'text-center mt-4 text-sm text-red-500 font-medium';
+            }
+        }
+
+        /**
+         * Handles inline status updates for tasks.
+         */
+        window.handleUpdateTaskStatus = function(id, newStatus) {
+            const record = getRecordById(id, 'tasks');
+            if (record) {
+                record.status = newStatus;
+                saveToLocalStorage();
+                renderTasks(farmData.tasks); // Re-render the task list
+            }
+        }
+
+
+        /**
+         * Closes a specific modal.
+         * @param {string} modalType - 'delete' or 'edit'.
+         */
+        window.closeModal = function(modalType) {
+            const modalBackdrop = document.getElementById(`${modalType}-modal-backdrop`);
+            const modalContent = document.getElementById(`${modalType}-modal-content`);
+
+            modalContent.classList.remove('scale-100', 'opacity-100');
+            modalContent.classList.add('scale-95', 'opacity-0');
+
+            setTimeout(() => modalBackdrop.classList.add('hidden'), 300); // Wait for animation
+
+            if (modalType === 'edit') {
+                currentEditingRecord = null; // Clear editing state
+            }
+        }
+
+        // Execute initialization when the DOM is ready
+        initializeLocalApp();
+
+    </script>
+</body>
+</html>
