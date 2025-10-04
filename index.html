@@ -103,6 +103,8 @@
                 <button onclick="changeView('production')" id="tab-production" class="py-3 px-1 text-gray-600 hover:text-primary-green transition duration-200">Production</button>
                 <button onclick="changeView('tasks')" id="tab-tasks" class="py-3 px-1 text-gray-600 hover:text-primary-green transition duration-200">Tasks</button>
                 <button onclick="changeView('inventory')" id="tab-inventory" class="py-3 px-1 text-gray-600 hover:text-primary-green transition duration-200">Inventory</button>
+                <button onclick="changeView('animalhub')" id="tab-animalhub" class="py-3 px-1 text-gray-600 hover:text-primary-green transition duration-200">Animal Hub</button>
+                <button onclick="changeView('equipment')" id="tab-equipment" class="py-3 px-1 text-gray-600 hover:text-primary-green transition duration-200">Equipment</button>
             </div>
         </nav>
 
@@ -129,6 +131,14 @@
 
         <div id="view-inventory" class="view-container hidden">
             <!-- Inventory content will be rendered here -->
+        </div>
+
+        <div id="view-animalhub" class="view-container hidden">
+            <!-- Animal Hub content will be rendered here -->
+        </div>
+
+        <div id="view-equipment" class="view-container hidden">
+            <!-- Equipment content will be rendered here -->
         </div>
 
     </div>
@@ -193,6 +203,9 @@
             production: [],
             tasks: [],
             inventory: [],
+            breeding: [],
+            health: [],
+            equipment: [],
             // Available options for the UI
             livestockTypes: ["bees", "heifers", "bulls", "chicken", "duck", "geese", "fish", "goats", "sheep", "turkey"],
             productionTypes: ["Milk (Liters)", "Eggs (Dozens)", "Honey (KGs)"],
@@ -202,7 +215,11 @@
             },
             taskPriorities: ['High', 'Medium', 'Low'],
             taskStatuses: ['To Do', 'In Progress', 'Done'],
-            inventoryCategories: ['Feed', 'Medicine', 'Fertilizer', 'Seed', 'Equipment Part', 'Fuel', 'Other Supplies']
+            inventoryCategories: ['Feed', 'Medicine', 'Fertilizer', 'Seed', 'Equipment Part', 'Fuel', 'Other Supplies'],
+            animalSpecies: ['Cattle', 'Swine', 'Sheep', 'Goats', 'Poultry', 'Other'],
+            breedingStatuses: ['In Calf/Farrow', 'Calved/Farrowed', 'Open/Unserved', 'Confirmed'],
+            // Average Gestation Periods in days (used for simple EDD calculation)
+            gestationDays: { 'Cattle': 283, 'Swine': 114, 'Sheep': 150, 'Goats': 150, 'Poultry': 21, 'Other': 283 }
         };
 
         /**
@@ -219,6 +236,413 @@
             }
         }
 
+        // --- ANIMAL HUB (BREEDING & HEALTH) ---
+
+        /**
+         * Calculates the difference in days between a future date string and today.
+         */
+        function getDaysDifference(futureDateStr) {
+            const future = new Date(futureDateStr);
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            const diffTime = future.getTime() - today.getTime();
+            return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+        }
+
+        /**
+         * Calculates the expected due date based on service date and species.
+         */
+        function calculateDueDate(serviceDate, species) {
+            if (!serviceDate) return '';
+            const gestation = farmData.gestationDays[species] || farmData.gestationDays['Other'];
+            const date = new Date(serviceDate);
+            date.setDate(date.getDate() + gestation);
+            return date.toISOString().split('T')[0]; // Return YYYY-MM-DD
+        }
+
+        /**
+         * Renders the Breeding Tracker view content.
+         */
+        function renderBreedingTracker() {
+            const records = farmData.breeding;
+            const newRecordDueDate = calculateDueDate(document.getElementById('breeding-service-date')?.value, document.getElementById('breeding-species')?.value);
+
+            return `
+                <div class="bg-card-bg p-8 rounded-2xl shadow-lg border border-gray-200/80 mb-8">
+                    <h3 class="text-xl font-bold mb-5 border-b pb-3 text-gray-800">Add New Service Record</h3>
+                    <form id="add-breeding-form" onsubmit="event.preventDefault(); handleAddBreedingRecord();">
+                        <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
+                            <input type="text" id="breeding-animal-id" required placeholder="Animal ID (e.g., Cow #102)" class="input-focus w-full p-3 border border-gray-300 rounded-lg">
+                            <select id="breeding-species" required class="input-focus w-full p-3 border border-gray-300 rounded-lg" onchange="renderAnimalHub('breeding')">
+                                ${farmData.animalSpecies.map(s => `<option value="${s}">${s}</option>`).join('')}
+                            </select>
+                            <input type="date" id="breeding-service-date" required class="input-focus w-full p-3 border border-gray-300 rounded-lg" value="${new Date().toISOString().substring(0, 10)}" onchange="renderAnimalHub('breeding')">
+                            <button type="submit" class="w-full bg-primary-green text-white py-3 rounded-lg font-bold hover:bg-primary-green-dark transition shadow-md">Log Service</button>
+                        </div>
+                        <p class="text-sm text-gray-500 italic">*Estimated due date: <span class="font-semibold">${newRecordDueDate || 'N/A'}</span></p>
+                        <p id="breeding-msg" class="text-center mt-3 text-sm font-medium"></p>
+                    </form>
+                </div>
+                <div class="bg-card-bg rounded-2xl shadow-lg overflow-hidden border border-gray-200/80">
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full divide-y divide-gray-200">
+                            <thead class="bg-gray-50">
+                                <tr>
+                                    <th class="px-5 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Animal ID</th>
+                                    <th class="px-5 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Species</th>
+                                    <th class="px-5 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Service Date</th>
+                                    <th class="px-5 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Due Date</th>
+                                    <th class="px-5 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Status</th>
+                                    <th class="px-5 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Due In</th>
+                                    <th class="px-5 py-3 text-right">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody class="bg-white divide-y divide-gray-100">
+                                ${records.length > 0 ? records.map(rec => {
+                                    const daysRemaining = getDaysDifference(rec.expectedDueDate);
+                                    const isDue = rec.status === 'In Calf/Farrow' && daysRemaining <= 14;
+                                    const statusClasses = rec.status === 'Calved/Farrowed' ? 'bg-green-100 text-green-700' : (rec.status === 'Open/Unserved' ? 'bg-gray-100 text-gray-700' : (isDue ? 'bg-red-100 text-red-700 font-bold' : 'bg-blue-100 text-blue-700'));
+                                    return `
+                                        <tr class="hover:bg-gray-50/80">
+                                            <td class="px-5 py-3 font-semibold">${rec.animalId}</td>
+                                            <td class="px-5 py-3 text-sm">${rec.species}</td>
+                                            <td class="px-5 py-3 text-sm">${rec.serviceDate}</td>
+                                            <td class="px-5 py-3 text-sm">${rec.expectedDueDate}</td>
+                                            <td class="px-5 py-3"><span class="px-2 py-1 text-xs rounded-full ${statusClasses}">${rec.status}</span></td>
+                                            <td class="px-5 py-3 text-sm font-medium ${daysRemaining <= 0 ? 'text-red-600' : 'text-blue-600'}">
+                                                ${rec.status === 'In Calf/Farrow' ? (daysRemaining > 0 ? `${daysRemaining} days` : 'OVERDUE') : 'N/A'}
+                                            </td>
+                                            <td class="px-5 py-3 text-right space-x-2">
+                                                <select onchange="handleUpdateBreedingStatus('${rec.id}', this.value)" class="text-xs p-1 border border-gray-300 rounded-md">
+                                                    ${farmData.breedingStatuses.map(s => `<option value="${s}" ${rec.status === s ? 'selected' : ''}>${s}</option>`).join('')}
+                                                </select>
+                                                <button onclick="window.confirmDelete('${rec.id}', 'breeding')" class="text-red-600 hover:text-red-800 p-1.5 rounded-full hover:bg-red-100" title="Delete">
+                                                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    `;
+                                }).join('') : `<tr><td colspan="7" class="px-5 py-10 text-center text-gray-500 italic">No breeding records found.</td></tr>`}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            `;
+        }
+
+        /**
+         * Renders the Health Tracker view content.
+         */
+        function renderHealthTracker() {
+            const records = farmData.health;
+            return `
+                <div class="bg-card-bg p-8 rounded-2xl shadow-lg border border-gray-200/80 mb-8">
+                    <h3 class="text-xl font-bold mb-5 border-b pb-3 text-gray-800">Log New Health Event</h3>
+                    <form id="add-health-form" onsubmit="event.preventDefault(); handleAddHealthRecord();">
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                            <input type="text" id="health-animal-id" required placeholder="Animal ID" class="input-focus w-full p-3 border border-gray-300 rounded-lg">
+                            <input type="date" id="health-record-date" required class="input-focus w-full p-3 border border-gray-300 rounded-lg" value="${new Date().toISOString().substring(0, 10)}">
+                            <input type="text" id="health-vet" placeholder="Veterinarian (Optional)" class="input-focus w-full p-3 border border-gray-300 rounded-lg">
+                        </div>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                            <textarea id="health-diagnosis" required rows="2" placeholder="Diagnosis (e.g., Pneumonia)" class="input-focus w-full p-3 border border-gray-300 rounded-lg"></textarea>
+                            <textarea id="health-treatment" rows="2" placeholder="Treatment (e.g., 5cc Penicillin)" class="input-focus w-full p-3 border border-gray-300 rounded-lg"></textarea>
+                        </div>
+                        <button type="submit" class="w-full bg-primary-green text-white py-3 rounded-lg font-bold hover:bg-primary-green-dark transition shadow-md">Log Health Record</button>
+                        <p id="health-msg" class="text-center mt-3 text-sm font-medium"></p>
+                    </form>
+                </div>
+                <div class="bg-card-bg rounded-2xl shadow-lg overflow-hidden border border-gray-200/80">
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full divide-y divide-gray-200">
+                            <thead class="bg-gray-50">
+                                <tr>
+                                    <th class="px-5 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Date</th>
+                                    <th class="px-5 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Animal ID</th>
+                                    <th class="px-5 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Diagnosis</th>
+                                    <th class="px-5 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Treatment</th>
+                                    <th class="px-5 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Vet</th>
+                                    <th class="px-5 py-3 text-right">Action</th>
+                                </tr>
+                            </thead>
+                            <tbody class="bg-white divide-y divide-gray-100">
+                                ${records.length > 0 ? records.map(rec => `
+                                    <tr class="hover:bg-gray-50/80">
+                                        <td class="px-5 py-3 text-sm">${rec.recordDate}</td>
+                                        <td class="px-5 py-3 font-semibold">${rec.animalId}</td>
+                                        <td class="px-5 py-3 text-sm max-w-xs truncate">${rec.diagnosis}</td>
+                                        <td class="px-5 py-3 text-sm max-w-xs truncate">${rec.treatment || 'N/A'}</td>
+                                        <td class="px-5 py-3 text-sm">${rec.veterinarian || 'N/A'}</td>
+                                        <td class="px-5 py-3 text-right">
+                                            <button onclick="window.confirmDelete('${rec.id}', 'health')" class="text-red-600 hover:text-red-800 p-1.5 rounded-full hover:bg-red-100" title="Delete">
+                                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                                            </button>
+                                        </td>
+                                    </tr>
+                                `).join('') : `<tr><td colspan="6" class="px-5 py-10 text-center text-gray-500 italic">No health records found.</td></tr>`}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            `;
+        }
+
+        /**
+         * Renders the main Animal Hub view with sub-tabs.
+         */
+        function renderAnimalHub(activeSubView = 'breeding') {
+            const container = document.getElementById('view-animalhub');
+            
+            const getSubTabClass = (tabName) => activeSubView === tabName 
+                ? 'border-primary-green text-primary-green font-semibold' 
+                : 'border-transparent text-gray-500 hover:text-gray-800';
+
+            let contentHtml = '';
+            if (activeSubView === 'breeding') {
+                contentHtml = renderBreedingTracker();
+            } else if (activeSubView === 'health') {
+                contentHtml = renderHealthTracker();
+            }
+
+            container.innerHTML = `
+                <h2 class="text-3xl font-bold text-gray-800 mb-4">Animal Hub</h2>
+                <p class="text-gray-600 mb-8">Track individual animal breeding cycles and health records.</p>
+                
+                <div class="mb-8">
+                    <div class="flex space-x-6 border-b-2 border-gray-200">
+                        <button onclick="renderAnimalHub('breeding')" class="py-3 px-2 text-lg border-b-4 ${getSubTabClass('breeding')}">
+                            Breeding Tracker
+                        </button>
+                        <button onclick="renderAnimalHub('health')" class="py-3 px-2 text-lg border-b-4 ${getSubTabClass('health')}">
+                            Health Tracker
+                        </button>
+                    </div>
+                </div>
+
+                <div id="animal-hub-content">
+                    ${contentHtml}
+                </div>
+            `;
+        }
+
+        window.handleAddBreedingRecord = function() {
+            const animalId = document.getElementById('breeding-animal-id').value.trim();
+            const species = document.getElementById('breeding-species').value;
+            const serviceDate = document.getElementById('breeding-service-date').value;
+            const msgEl = document.getElementById('breeding-msg');
+
+            if (!animalId || !species || !serviceDate) {
+                msgEl.textContent = 'Please fill all fields.';
+                msgEl.className = 'text-center mt-3 text-sm text-red-500 font-medium';
+                return;
+            }
+
+            const record = {
+                id: Date.now().toString(),
+                animalId,
+                species,
+                serviceDate,
+                status: 'In Calf/Farrow', // Default status
+                expectedDueDate: calculateDueDate(serviceDate, species),
+                createdAt: new Date().toISOString()
+            };
+
+            farmData.breeding.push(record);
+            farmData.breeding.sort((a, b) => new Date(b.serviceDate) - new Date(a.serviceDate));
+            saveToLocalStorage();
+            renderAnimalHub('breeding');
+
+            msgEl.textContent = `Breeding record for ${animalId} added.`;
+            msgEl.className = 'text-center mt-3 text-sm text-green-600 font-medium';
+            setTimeout(() => msgEl.textContent = '', 3000);
+        }
+
+        window.handleAddHealthRecord = function() {
+            const animalId = document.getElementById('health-animal-id').value.trim();
+            const recordDate = document.getElementById('health-record-date').value;
+            const diagnosis = document.getElementById('health-diagnosis').value.trim();
+            const treatment = document.getElementById('health-treatment').value.trim();
+            const veterinarian = document.getElementById('health-vet').value.trim();
+            const msgEl = document.getElementById('health-msg');
+
+            if (!animalId || !recordDate || !diagnosis) {
+                msgEl.textContent = 'Animal ID, Date, and Diagnosis are required.';
+                msgEl.className = 'text-center mt-3 text-sm text-red-500 font-medium';
+                return;
+            }
+
+            const record = {
+                id: Date.now().toString(),
+                animalId,
+                recordDate,
+                diagnosis,
+                treatment,
+                veterinarian,
+                createdAt: new Date().toISOString()
+            };
+
+            farmData.health.push(record);
+            farmData.health.sort((a, b) => new Date(b.recordDate) - new Date(a.date));
+            saveToLocalStorage();
+            renderAnimalHub('health');
+
+            msgEl.textContent = `Health record for ${animalId} added.`;
+            msgEl.className = 'text-center mt-3 text-sm text-green-600 font-medium';
+            setTimeout(() => msgEl.textContent = '', 3000);
+        }
+
+        window.handleUpdateBreedingStatus = function(id, newStatus) {
+            const record = getRecordById(id, 'breeding');
+            if (record) {
+                record.status = newStatus;
+                saveToLocalStorage();
+                renderAnimalHub('breeding');
+            }
+        }
+
+        /**
+         * Renders the Equipment Maintenance Log view.
+         */
+        function renderEquipment(equipmentList) {
+            const container = document.getElementById('view-equipment');
+            const sortedEquipment = equipmentList.slice().sort((a, b) => a.name.localeCompare(b.name));
+
+            container.innerHTML = `
+                <h2 class="text-3xl font-bold text-gray-800 mb-8">Equipment & Maintenance</h2>
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                    <!-- Add Equipment Form -->
+                    <div class="lg:col-span-1 bg-card-bg p-8 rounded-2xl shadow-lg border border-gray-200/80 h-fit">
+                        <h3 class="text-xl font-bold mb-5 border-b pb-3 text-gray-800">Add New Equipment</h3>
+                        <form id="add-equipment-form" onsubmit="event.preventDefault(); handleAddEquipment();">
+                            <div class="mb-4">
+                                <label for="equipment-name" class="block text-sm font-medium text-gray-700 mb-1">Equipment Name</label>
+                                <input type="text" id="equipment-name" required placeholder="e.g., John Deere 8R Tractor" class="input-focus w-full p-3 border border-gray-300 rounded-lg">
+                            </div>
+                            <div class="mb-4">
+                                <label for="equipment-model" class="block text-sm font-medium text-gray-700 mb-1">Model/Serial Number</label>
+                                <input type="text" id="equipment-model" placeholder="e.g., 8R 370 / #12345" class="input-focus w-full p-3 border border-gray-300 rounded-lg">
+                            </div>
+                            <div class="mb-4">
+                                <label for="equipment-purchase-date" class="block text-sm font-medium text-gray-700 mb-1">Purchase Date</label>
+                                <input type="date" id="equipment-purchase-date" required class="input-focus w-full p-3 border border-gray-300 rounded-lg" value="${new Date().toISOString().substring(0, 10)}">
+                            </div>
+                            <button type="submit" class="w-full bg-primary-green text-white py-3 rounded-lg font-bold hover:bg-primary-green-dark transition shadow-md">Add to Fleet</button>
+                            <p id="equipment-msg" class="text-center mt-3 text-sm font-medium"></p>
+                        </form>
+                    </div>
+
+                    <!-- Equipment List -->
+                    <div class="lg:col-span-2">
+                        <h3 class="text-xl font-bold mb-5 pb-3 border-b text-gray-800">Your Fleet (${sortedEquipment.length})</h3>
+                        <div class="space-y-6">
+                            ${sortedEquipment.length > 0 ? sortedEquipment.map(item => `
+                                <div class="bg-card-bg p-6 rounded-2xl shadow-lg border border-gray-200/80">
+                                    <div class="flex justify-between items-start border-b pb-4 mb-4">
+                                        <div>
+                                            <h4 class="text-lg font-bold text-primary-green">${item.name}</h4>
+                                            <p class="text-sm text-gray-600">${item.model || 'No model info'}</p>
+                                            <p class="text-xs text-gray-500 mt-1">Purchased: ${item.purchaseDate}</p>
+                                        </div>
+                                        <div class="flex-shrink-0 space-x-2">
+                                            <button onclick="window.openEditModal('${item.id}', 'equipment')" class="text-blue-600 hover:text-blue-800 p-1.5 rounded-full hover:bg-blue-100" title="Edit Equipment Details">
+                                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-7-3l-4 4V14h3l4-4M16 5l3 3m-8 10h.01"></path></svg>
+                                            </button>
+                                            <button onclick="window.confirmDelete('${item.id}', 'equipment')" class="text-red-600 hover:text-red-800 p-1.5 rounded-full hover:bg-red-100" title="Delete Equipment">
+                                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                                            </button>
+                                        </div>
+                                    </div>
+
+                                    <!-- Maintenance Log Section -->
+                                    <h5 class="font-semibold text-gray-700 mb-3">Maintenance Log</h5>
+                                    <div class="space-y-3 max-h-48 overflow-y-auto pr-2 mb-4">
+                                        ${item.maintenanceLog && item.maintenanceLog.length > 0 ? item.maintenanceLog.sort((a,b) => new Date(b.date) - new Date(a.date)).map(log => `
+                                            <div class="text-sm p-3 bg-gray-50 rounded-lg border border-gray-200">
+                                                <p class="font-semibold text-gray-800">${log.description}</p>
+                                                <p class="text-xs text-gray-500">On: ${log.date} | Cost: KSh ${parseFloat(log.cost || 0).toFixed(2)}</p>
+                                            </div>
+                                        `).join('') : '<p class="text-xs text-gray-500 italic text-center py-2">No maintenance records yet.</p>'}
+                                    </div>
+
+                                    <!-- Add Maintenance Form -->
+                                    <form onsubmit="event.preventDefault(); handleAddMaintenanceRecord('${item.id}');" class="mt-4 pt-4 border-t">
+                                        <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                                            <input type="text" id="maint-desc-${item.id}" required placeholder="Service Description" class="input-focus w-full p-2 text-sm border border-gray-300 rounded-lg col-span-3 sm:col-span-1">
+                                            <input type="number" id="maint-cost-${item.id}" placeholder="Cost (KSh)" step="0.01" class="input-focus w-full p-2 text-sm border border-gray-300 rounded-lg">
+                                            <input type="date" id="maint-date-${item.id}" required class="input-focus w-full p-2 text-sm border border-gray-300 rounded-lg" value="${new Date().toISOString().substring(0, 10)}">
+                                        </div>
+                                        <button type="submit" class="w-full mt-2 bg-secondary-yellow text-white py-2 text-sm rounded-lg font-bold hover:bg-amber-600 transition">Add Log Entry</button>
+                                    </form>
+                                </div>
+                            `).join('') : `
+                                <div class="text-center text-gray-500 italic py-10 bg-card-bg rounded-2xl shadow-lg border border-gray-200/80">
+                                    <p>Your equipment fleet is empty.</p>
+                                    <p class="text-sm">Use the form on the left to add your first tractor, combine, or other machinery.</p>
+                                </div>
+                            `}
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        window.handleAddEquipment = function() {
+            const name = document.getElementById('equipment-name').value.trim();
+            const model = document.getElementById('equipment-model').value.trim();
+            const purchaseDate = document.getElementById('equipment-purchase-date').value;
+            const msgEl = document.getElementById('equipment-msg');
+
+            if (!name || !purchaseDate) {
+                msgEl.textContent = 'Name and Purchase Date are required.';
+                msgEl.className = 'text-center mt-3 text-sm text-red-500 font-medium';
+                return;
+            }
+
+            const record = {
+                id: Date.now().toString(),
+                name,
+                model,
+                purchaseDate,
+                maintenanceLog: [], // Initialize with an empty log
+                createdAt: new Date().toISOString()
+            };
+
+            farmData.equipment.push(record);
+            saveToLocalStorage();
+            renderEquipment(farmData.equipment);
+
+            msgEl.textContent = `Equipment '${name}' added.`;
+            msgEl.className = 'text-center mt-3 text-sm text-green-600 font-medium';
+            document.getElementById('add-equipment-form').reset();
+            document.getElementById('equipment-purchase-date').value = new Date().toISOString().substring(0, 10);
+            setTimeout(() => msgEl.textContent = '', 3000);
+        }
+
+        window.handleAddMaintenanceRecord = function(equipmentId) {
+            const equipment = getRecordById(equipmentId, 'equipment');
+            if (!equipment) return;
+
+            const description = document.getElementById(`maint-desc-${equipmentId}`).value.trim();
+            const cost = document.getElementById(`maint-cost-${equipmentId}`).value;
+            const date = document.getElementById(`maint-date-${equipmentId}`).value;
+
+            if (!description || !date) {
+                alert('Please provide a description and date for the maintenance log.');
+                return;
+            }
+
+            const logEntry = {
+                id: Date.now().toString(),
+                description,
+                cost: parseFloat(cost) || 0,
+                date
+            };
+
+            equipment.maintenanceLog.push(logEntry);
+            saveToLocalStorage();
+            renderEquipment(farmData.equipment);
+        }
+
         // --- LOCAL STORAGE PERSISTENCE ---
 
         /**
@@ -230,6 +654,9 @@
             const storedProduction = localStorage.getItem('farmProduction');
             const storedTasks = localStorage.getItem('farmTasks');
             const storedInventory = localStorage.getItem('farmInventory');
+            const storedBreeding = localStorage.getItem('farmBreeding');
+            const storedHealth = localStorage.getItem('farmHealth');
+            const storedEquipment = localStorage.getItem('farmEquipment');
 
             if (storedLivestock) {
                 farmData.livestock = JSON.parse(storedLivestock);
@@ -250,6 +677,18 @@
                 // Load and sort inventory by name
                 farmData.inventory = JSON.parse(storedInventory).sort((a, b) => a.name.localeCompare(b.name));
             }
+            if (storedBreeding) {
+                // Load and sort breeding records by service date descending
+                farmData.breeding = JSON.parse(storedBreeding).sort((a, b) => new Date(b.serviceDate) - new Date(a.serviceDate));
+            }
+            if (storedHealth) {
+                // Load and sort health records by record date descending
+                farmData.health = JSON.parse(storedHealth).sort((a, b) => new Date(b.recordDate) - new Date(a.recordDate));
+            }
+            if (storedEquipment) {
+                // Load and sort equipment by name
+                farmData.equipment = JSON.parse(storedEquipment).sort((a, b) => a.name.localeCompare(b.name));
+            }
         }
 
         /**
@@ -261,6 +700,9 @@
             localStorage.setItem('farmProduction', JSON.stringify(farmData.production));
             localStorage.setItem('farmTasks', JSON.stringify(farmData.tasks));
             localStorage.setItem('farmInventory', JSON.stringify(farmData.inventory));
+            localStorage.setItem('farmBreeding', JSON.stringify(farmData.breeding));
+            localStorage.setItem('farmHealth', JSON.stringify(farmData.health));
+            localStorage.setItem('farmEquipment', JSON.stringify(farmData.equipment));
         }
 
         // --- INITIALIZATION ---
@@ -311,7 +753,9 @@
             if (viewName === 'production') renderProduction(farmData.production);
             if (viewName === 'tasks') renderTasks(farmData.tasks);
             if (viewName === 'inventory') renderInventory(farmData.inventory);
-            if (viewName === 'dashboard') renderDashboard(farmData.livestock, farmData.transactions, farmData.production, farmData.tasks, farmData.inventory);
+            if (viewName === 'animalhub') renderAnimalHub(); // New hub renderer
+            if (viewName === 'equipment') renderEquipment(farmData.equipment);
+            if (viewName === 'dashboard') renderDashboard(farmData.livestock, farmData.transactions, farmData.production, farmData.tasks, farmData.inventory, farmData.equipment);
         }
 
         /**
@@ -409,6 +853,35 @@
                 tasksHtml = `<p class="text-center text-gray-500 italic py-4">No upcoming tasks. You're all caught up!</p>`;
             }
 
+            // 4. Upcoming Births Summary
+            const upcomingBirths = farmData.breeding
+                .filter(b => {
+                    const daysRemaining = getDaysDifference(b.expectedDueDate);
+                    return b.status === 'In Calf/Farrow' && daysRemaining >= 0 && daysRemaining <= 30;
+                })
+                .sort((a, b) => new Date(a.expectedDueDate) - new Date(b.expectedDueDate));
+
+            let birthsHtml = upcomingBirths.map(birth => {
+                const daysRemaining = getDaysDifference(birth.expectedDueDate);
+                const dueText = daysRemaining === 0 ? 'Due Today' : `${daysRemaining} days`;
+                const dueColor = daysRemaining <= 7 ? 'text-red-600 font-bold' : 'text-blue-600 font-medium';
+                return `
+                    <div class="flex items-center justify-between p-3 bg-gray-50/80 rounded-lg border border-gray-200/90 hover:bg-white transition-colors duration-200">
+                        <div>
+                            <p class="font-semibold text-gray-800">${birth.animalId} <span class="text-sm font-normal text-gray-500">(${birth.species})</span></p>
+                            <p class="text-xs text-gray-600">Due: ${birth.expectedDueDate}</p>
+                        </div>
+                        <span class="text-xs ${dueColor}">${dueText}</span>
+                    </div>
+                `;
+            }).join('');
+
+            const upcomingBirthsCard = upcomingBirths.length > 0 ? `
+                <div class="lg:col-span-2 bg-card-bg p-8 rounded-2xl shadow-lg border border-gray-200/80">
+                    <h3 class="text-xl font-semibold text-gray-700 mb-5 flex items-center">Upcoming Births (Next 30 Days)</h3>
+                    <div class="space-y-3">${birthsHtml}</div>
+                </div>` : '';
+
             // 4. Low Stock Alerts
             const lowStockItems = inventory.filter(item => 
                 item.lowStockThreshold !== null && parseFloat(item.quantity) <= parseFloat(item.lowStockThreshold)
@@ -454,7 +927,7 @@
                 </div>
 
                 <!-- Multi-Card Section -->
-                <div class="grid grid-cols-1 lg:grid-cols-5 gap-10">
+                <div class="grid grid-cols-1 lg:grid-cols-5 gap-10 mb-10">
                     <!-- Livestock Summary Card (lg:col-span-3) -->
                     <div class="lg:col-span-3 bg-card-bg p-8 rounded-2xl shadow-lg border border-gray-200/80">
                         <h3 class="text-xl font-semibold text-gray-700 mb-5 flex items-center">
@@ -488,6 +961,8 @@
                         </div>
                     </div>
                 </div>
+
+                ${upcomingBirthsCard ? `<div class="grid grid-cols-1 lg:grid-cols-2 gap-10">${upcomingBirthsCard}</div>` : ''}
 
                 <!-- Finance Summary Card -->
                 <div class="bg-card-bg p-8 rounded-2xl shadow-lg border border-gray-200/80 mt-10">
@@ -1643,7 +2118,13 @@
                 farmData[collectionName] = farmData[collectionName].filter(item => item.id !== id);
                 
                 saveToLocalStorage();
-                window.changeView(collectionName); // Re-render the current view
+                // Special handling for animal hub sub-views
+                if (collectionName === 'breeding' || collectionName === 'health') {
+                    renderAnimalHub(collectionName);
+                } else if (collectionName !== 'equipment') { // Equipment re-renders its own view
+                    window.changeView(collectionName); // Re-render the current view
+                }
+
             } catch (error) {
                 console.error(`Error deleting record ${id}:`, error);
             }
@@ -1779,6 +2260,42 @@
                         <input type="hidden" id="edit-collection-name" value="${collectionName}">
                     `;
                     break;
+
+                case 'breeding':
+                    formHtml = `
+                        ${input('edit-breeding-animal-id', 'Animal ID', 'text', record.animalId)}
+                        ${select('edit-breeding-species', 'Species', farmData.animalSpecies, record.species)}
+                        ${input('edit-breeding-service-date', 'Service Date', 'date', record.serviceDate)}
+                        ${select('edit-breeding-status', 'Status', farmData.breedingStatuses, record.status)}
+                        <input type="hidden" id="edit-record-id" value="${id}">
+                        <input type="hidden" id="edit-collection-name" value="${collectionName}">
+                    `;
+                    break;
+
+                case 'health':
+                    formHtml = `
+                        ${input('edit-health-animal-id', 'Animal ID', 'text', record.animalId)}
+                        ${input('edit-health-record-date', 'Record Date', 'date', record.recordDate)}
+                        ${textarea('edit-health-diagnosis', 'Diagnosis', record.diagnosis)}
+                        ${textarea('edit-health-treatment', 'Treatment', record.treatment)}
+                        ${input('edit-health-veterinarian', 'Veterinarian', 'text', record.veterinarian)}
+                        <input type="hidden" id="edit-record-id" value="${id}">
+                        <input type="hidden" id="edit-collection-name" value="${collectionName}">
+                    `;
+                    break;
+
+                case 'equipment':
+                    formHtml = `
+                        ${input('edit-equipment-name', 'Equipment Name', 'text', record.name)}
+                        ${input('edit-equipment-model', 'Model/Serial #', 'text', record.model)}
+                        ${input('edit-equipment-purchase-date', 'Purchase Date', 'date', record.purchaseDate)}
+                        <p class="text-xs text-gray-500 italic mt-4">Note: Maintenance logs are managed directly on the Equipment page.</p>
+                        <input type="hidden" id="edit-record-id" value="${id}">
+                        <input type="hidden" id="edit-collection-name" value="${collectionName}">
+                    `;
+                    break;
+
+
             }
 
             return { html: formHtml, title: `Edit ${recordType} Record` };
@@ -1912,11 +2429,63 @@
                             updated = true;
                         }
                         break;
+                    
+                    case 'breeding':
+                        const bAnimalId = document.getElementById('edit-breeding-animal-id').value.trim();
+                        const bSpecies = document.getElementById('edit-breeding-species').value;
+                        const bServiceDate = document.getElementById('edit-breeding-service-date').value;
+                        const bStatus = document.getElementById('edit-breeding-status').value;
+
+                        if (bAnimalId && bSpecies && bServiceDate && bStatus) {
+                            record.animalId = bAnimalId;
+                            record.species = bSpecies;
+                            record.serviceDate = bServiceDate;
+                            record.status = bStatus;
+                            record.expectedDueDate = calculateDueDate(bServiceDate, bSpecies);
+                            updated = true;
+                        }
+                        break;
+
+                    case 'health':
+                        const hAnimalId = document.getElementById('edit-health-animal-id').value.trim();
+                        const hRecordDate = document.getElementById('edit-health-record-date').value;
+                        const hDiagnosis = document.getElementById('edit-health-diagnosis').value.trim();
+                        const hTreatment = document.getElementById('edit-health-treatment').value.trim();
+                        const hVet = document.getElementById('edit-health-veterinarian').value.trim();
+
+                        if (hAnimalId && hRecordDate && hDiagnosis) {
+                            record.animalId = hAnimalId;
+                            record.recordDate = hRecordDate;
+                            record.diagnosis = hDiagnosis;
+                            record.treatment = hTreatment;
+                            record.veterinarian = hVet;
+                            updated = true;
+                        }
+                        break;
+
+                    case 'equipment':
+                        const eName = document.getElementById('edit-equipment-name').value.trim();
+                        const eModel = document.getElementById('edit-equipment-model').value.trim();
+                        const ePurchaseDate = document.getElementById('edit-equipment-purchase-date').value;
+
+                        if (eName && ePurchaseDate) {
+                            record.name = eName;
+                            record.model = eModel;
+                            record.purchaseDate = ePurchaseDate;
+                            updated = true;
+                        }
+                        break;
                 }
 
                 if (updated) {
                     saveToLocalStorage();
-                    window.changeView(collectionName); // Re-render the current view to show changes
+                    if (collectionName === 'equipment') {
+                        renderEquipment(farmData.equipment);
+                    } else if (collectionName === 'breeding' || collectionName === 'health') {
+                        renderAnimalHub(collectionName);
+                    } else {
+                        window.changeView(collectionName); // Re-render the current view to show changes
+                    }
                     msgEl.textContent = 'Record updated successfully!';
                     msgEl.className = 'text-center mt-4 text-sm text-green-600 font-medium';
                     setTimeout(() => window.closeModal('edit'), 1000);
