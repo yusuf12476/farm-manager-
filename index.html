@@ -80,6 +80,14 @@
             box-shadow: var(--tw-ring-shadow);
             border-color: #059669;
         }
+
+        .nav-scrollbar::-webkit-scrollbar {
+            height: 4px;
+        }
+        .nav-scrollbar::-webkit-scrollbar-thumb {
+            background-color: #d1d5db;
+            border-radius: 2px;
+        }
     </style>
 </head>
 <body class="min-h-screen">
@@ -96,15 +104,15 @@
 
         <!-- Navigation Tabs -->
         <nav class="border-b-2 border-gray-200 mb-8">
-            <div class="flex space-x-4 md:space-x-8 overflow-x-auto pb-2 -mb-2">
-                <button onclick="changeView('dashboard')" id="tab-dashboard" class="py-3 px-1 text-gray-600 hover:text-primary-green transition duration-200 active-tab">Dashboard</button>
-                <button onclick="changeView('livestock')" id="tab-livestock" class="py-3 px-1 text-gray-600 hover:text-primary-green transition duration-200">Livestock</button>
-                <button onclick="changeView('finance')" id="tab-finance" class="py-3 px-1 text-gray-600 hover:text-primary-green transition duration-200">Finance</button>
-                <button onclick="changeView('production')" id="tab-production" class="py-3 px-1 text-gray-600 hover:text-primary-green transition duration-200">Production</button>
-                <button onclick="changeView('tasks')" id="tab-tasks" class="py-3 px-1 text-gray-600 hover:text-primary-green transition duration-200">Tasks</button>
-                <button onclick="changeView('inventory')" id="tab-inventory" class="py-3 px-1 text-gray-600 hover:text-primary-green transition duration-200">Inventory</button>
-                <button onclick="changeView('animalhub')" id="tab-animalhub" class="py-3 px-1 text-gray-600 hover:text-primary-green transition duration-200">Animal Hub</button>
-                <button onclick="changeView('equipment')" id="tab-equipment" class="py-3 px-1 text-gray-600 hover:text-primary-green transition duration-200">Equipment</button>
+            <div class="flex space-x-4 md:space-x-8 overflow-x-auto pb-2 -mb-2 nav-scrollbar">
+                <button onclick="changeView('dashboard')" id="tab-dashboard" class="py-3 px-3 text-gray-600 hover:text-primary-green transition duration-200 whitespace-nowrap active-tab">Dashboard</button>
+                <button onclick="changeView('livestock')" id="tab-livestock" class="py-3 px-3 text-gray-600 hover:text-primary-green transition duration-200 whitespace-nowrap">Livestock</button>
+                <button onclick="changeView('finance')" id="tab-finance" class="py-3 px-3 text-gray-600 hover:text-primary-green transition duration-200 whitespace-nowrap">Finance</button>
+                <button onclick="changeView('production')" id="tab-production" class="py-3 px-3 text-gray-600 hover:text-primary-green transition duration-200 whitespace-nowrap">Production</button>
+                <button onclick="changeView('tasks')" id="tab-tasks" class="py-3 px-3 text-gray-600 hover:text-primary-green transition duration-200 whitespace-nowrap">Tasks</button>
+                <button onclick="changeView('inventory')" id="tab-inventory" class="py-3 px-3 text-gray-600 hover:text-primary-green transition duration-200 whitespace-nowrap">Inventory</button>
+                <button onclick="changeView('animalhub')" id="tab-animalhub" class="py-3 px-3 text-gray-600 hover:text-primary-green transition duration-200 whitespace-nowrap">Animal Hub</button>
+                <button onclick="changeView('equipment')" id="tab-equipment" class="py-3 px-3 text-gray-600 hover:text-primary-green transition duration-200 whitespace-nowrap">Equipment</button>
             </div>
         </nav>
 
