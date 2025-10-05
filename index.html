@@ -119,6 +119,7 @@
                     <a onclick="selectNavDropdownItem('inventory')" class="block px-4 py-3 text-gray-700 hover:bg-gray-100" data-nav="inventory">Inventory</a>
                     <a onclick="selectNavDropdownItem('animalhub')" class="block px-4 py-3 text-gray-700 hover:bg-gray-100" data-nav="animalhub">Animal Hub</a>
                     <a onclick="selectNavDropdownItem('equipment')" class="block px-4 py-3 text-gray-700 hover:bg-gray-100" data-nav="equipment">Equipment</a>
+                    <a onclick="selectNavDropdownItem('analytics')" class="block px-4 py-3 text-gray-700 hover:bg-gray-100" data-nav="analytics">Analytics</a>
                 </div>
             </div>
             <!-- Desktop Navigation (Visible on md and up) -->
@@ -131,6 +132,7 @@
                 <button onclick="changeView('inventory')" id="tab-inventory" class="py-3 px-3 text-gray-600 hover:text-primary-green transition duration-200 whitespace-nowrap">Inventory</button>
                 <button onclick="changeView('animalhub')" id="tab-animalhub" class="py-3 px-3 text-gray-600 hover:text-primary-green transition duration-200 whitespace-nowrap">Animal Hub</button>
                 <button onclick="changeView('equipment')" id="tab-equipment" class="py-3 px-3 text-gray-600 hover:text-primary-green transition duration-200 whitespace-nowrap">Equipment</button>
+                <button onclick="changeView('analytics')" id="tab-analytics" class="py-3 px-3 text-gray-600 hover:text-primary-green transition duration-200 whitespace-nowrap">Analytics</button>
             </div>
         </nav>
 
@@ -165,6 +167,10 @@
 
         <div id="view-equipment" class="view-container hidden">
             <!-- Equipment content will be rendered here -->
+        </div>
+
+        <div id="view-analytics" class="view-container hidden">
+            <!-- Analytics content will be rendered here -->
         </div>
 
     </div>
@@ -221,6 +227,12 @@
         };
         let expenseChart = null;
         let monthlyChart = null;
+        let incomeChart = null;
+        let yoyProductionChart = null;
+        let productionTrendChart = null;
+        let livestockCompositionChart = null;
+        let populationGrowthChart = null;
+        let taskStatusChart = null;
 
 
         window.farmData = {
@@ -776,9 +788,15 @@
             if (dropdownLabel) dropdownLabel.textContent = document.getElementById(`tab-${viewName}`).textContent;
 
             // Explicitly destroy charts when leaving the finance view to avoid memory leaks
-            if (viewName !== 'finance') {
+            if (viewName !== 'finance' && viewName !== 'analytics') {
                  if (expenseChart) { expenseChart.destroy(); expenseChart = null; }
                  if (monthlyChart) { monthlyChart.destroy(); monthlyChart = null; }
+                 if (incomeChart) { incomeChart.destroy(); incomeChart = null; }
+                 if (yoyProductionChart) { yoyProductionChart.destroy(); yoyProductionChart = null; }
+                 if (productionTrendChart) { productionTrendChart.destroy(); productionTrendChart = null; }
+                 if (livestockCompositionChart) { livestockCompositionChart.destroy(); livestockCompositionChart = null; }
+                 if (populationGrowthChart) { populationGrowthChart.destroy(); populationGrowthChart = null; }
+                 if (taskStatusChart) { taskStatusChart.destroy(); taskStatusChart = null; }
             }
 
             // Render the content of the view when switching to it
@@ -789,6 +807,7 @@
             if (viewName === 'inventory') renderInventory(farmData.inventory);
             if (viewName === 'animalhub') renderAnimalHub(); // New hub renderer
             if (viewName === 'equipment') renderEquipment(farmData.equipment);
+            if (viewName === 'analytics') renderAnalytics();
             if (viewName === 'dashboard') renderDashboard(farmData.livestock, farmData.transactions, farmData.production, farmData.tasks, farmData.inventory, farmData.equipment);
         }
 
@@ -803,6 +822,27 @@
                 return;
             }
             
+            // 0. Overdue Tasks
+            const today = new Date();
+            today.setHours(0, 0, 0, 0); // Normalize to start of day for comparison
+            const overdueTasks = tasks.filter(t => t.status !== 'Done' && new Date(t.dueDate) < today);
+
+            let overdueTasksHtml = overdueTasks.map(task => `
+                <div class="flex items-center justify-between p-3 bg-red-50/80 rounded-lg border border-red-200/90 hover:bg-red-100/50 transition-colors duration-200">
+                    <div>
+                        <p class="font-semibold text-red-800">${task.title}</p>
+                        <p class="text-xs text-red-600 font-bold">Due: ${task.dueDate}</p>
+                    </div>
+                    <button onclick="changeView('tasks')" class="text-xs font-medium text-blue-600 hover:underline">Go to Tasks</button>
+                </div>
+            `).join('');
+
+            const overdueTasksCard = overdueTasks.length > 0 ? `
+                <div class="bg-red-50/60 p-6 rounded-2xl shadow-md border-2 border-red-200/80 mb-10">
+                    <h3 class="text-xl font-semibold text-red-700 mb-4 flex items-center"><svg class="w-6 h-6 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>Overdue Tasks (${overdueTasks.length})</h3>
+                    <div class="space-y-3">${overdueTasksHtml}</div>
+                </div>` : '';
+
             // Calculate 30-day production summary
             const thirtyDaysAgo = new Date();
             thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
@@ -947,6 +987,7 @@
             container.innerHTML = `
                 <h2 class="text-2xl md:text-3xl font-bold text-gray-800 mb-8">Farm Dashboard</h2>
                 
+                ${overdueTasksCard}
                 ${lowStockCard}
 
                 <!-- Production Summary Card -->
@@ -1020,6 +1061,104 @@
                     </div>
                 </div>
             `;
+        }
+
+        /**
+         * Renders the Livestock Composition doughnut chart.
+         */
+        function renderLivestockCompositionChart(livestockData) {
+            if (livestockCompositionChart) livestockCompositionChart.destroy();
+            const ctx = document.getElementById('livestock-composition-chart')?.getContext('2d');
+            if (!ctx) return;
+
+            const counts = livestockData.reduce((acc, item) => {
+                acc[item.type] = (acc[item.type] || 0) + item.count;
+                return acc;
+            }, {});
+
+            const labels = Object.keys(counts);
+            const data = Object.values(counts);
+
+            if (data.length === 0) {
+                ctx.canvas.parentNode.innerHTML = '<p class="text-center text-gray-500 py-16">No livestock data to display.</p>';
+                return;
+            }
+
+            const chartColors = ['#059669', '#f59e0b', '#3b82f6', '#ef4444', '#8b5cf6', '#10b981', '#fbbf24', '#60a5fa'];
+
+            livestockCompositionChart = new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: labels.map(l => l.charAt(0).toUpperCase() + l.slice(1)),
+                    datasets: [{
+                        data: data,
+                        backgroundColor: labels.map((_, i) => chartColors[i % chartColors.length]),
+                        borderColor: '#ffffff',
+                        borderWidth: 2,
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { position: 'right', labels: { boxWidth: 12, font: { size: 11 } } },
+                        tooltip: {
+                            callbacks: {
+                                label: (c) => ` ${c.label}: ${c.parsed.toLocaleString()} head`
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        /**
+         * Renders the population growth chart.
+         */
+        function renderPopulationGrowthChart(livestockData) {
+            if (populationGrowthChart) populationGrowthChart.destroy();
+            const ctx = document.getElementById('population-growth-chart')?.getContext('2d');
+            if (!ctx) return;
+
+            const monthlyData = {};
+            const today = new Date();
+
+            for (let i = 0; i < 12; i++) {
+                const d = new Date(today.getFullYear(), today.getMonth() - i, 1);
+                const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+                const label = d.toLocaleString('en-US', { month: 'short', year: 'numeric' });
+                monthlyData[key] = { label, acquired: 0 };
+            }
+
+            livestockData.forEach(item => {
+                const acqDate = new Date(item.date);
+                const key = `${acqDate.getFullYear()}-${String(acqDate.getMonth() + 1).padStart(2, '0')}`;
+                if (monthlyData[key]) {
+                    monthlyData[key].acquired += item.count;
+                }
+            });
+
+            const sortedData = Object.values(monthlyData).sort((a, b) => new Date(a.label) - new Date(b.label));
+            const labels = sortedData.map(d => d.label);
+            const acquiredData = sortedData.map(d => d.acquired);
+
+            populationGrowthChart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'Acquired / Born',
+                        data: acquiredData,
+                        backgroundColor: '#34d399', // Emerald 400
+                        borderRadius: 4,
+                    }]
+                },
+                options: {
+                    responsive: true, maintainAspectRatio: false,
+                    scales: { x: { grid: { display: false } }, y: { beginAtZero: true, title: { display: true, text: 'Head Count' } } },
+                    plugins: { legend: { display: false }, tooltip: { callbacks: { label: (c) => ` ${c.dataset.label}: ${c.parsed.y.toLocaleString()}` } } }
+                }
+            });
         }
 
         /**
@@ -1296,6 +1435,7 @@
             
             // Destroy previous instance
             if (expenseChart) expenseChart.destroy();
+            if (incomeChart) incomeChart.destroy();
 
             const pieCtx = document.getElementById('expense-pie-chart')?.getContext('2d');
             if (pieCtx && expenseAmounts.length > 0) {
@@ -1340,14 +1480,62 @@
                  pieCtx.canvas.parentNode.innerHTML = '<p class="text-center text-gray-500 py-16">No expenses in this period to chart.</p>';
             }
 
+            // 2. Prepare Income Pie Chart Data
+            const incomes = transactions.filter(t => t.type === 'income');
+            const incomeData = incomes.reduce((acc, t) => {
+                acc[t.category] = (acc[t.category] || 0) + parseFloat(t.amount);
+                return acc;
+            }, {});
 
-            // 2. Prepare Monthly Performance Bar Chart Data (last 6 months)
+            const incomeLabels = Object.keys(incomeData);
+            const incomeAmounts = Object.values(incomeData);
+
+            const incomeCtx = document.getElementById('income-pie-chart')?.getContext('2d');
+            if (incomeCtx && incomeAmounts.length > 0) {
+                incomeChart = new Chart(incomeCtx, {
+                    type: 'doughnut',
+                    data: {
+                        labels: incomeLabels,
+                        datasets: [{
+                            data: incomeAmounts,
+                            backgroundColor: incomeLabels.map((_, i) => categoryColors[i % categoryColors.length]),
+                            borderColor: '#ffffff',
+                            borderWidth: 2
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: {
+                                position: 'right',
+                                labels: {
+                                    color: '#1f2937',
+                                    font: { family: 'Inter', size: 10 }
+                                }
+                            },
+                            tooltip: {
+                                callbacks: {
+                                    label: function(context) {
+                                        let label = context.label || '';
+                                        if (label) { label += ': '; }
+                                        label += 'KSh ' + context.parsed.toFixed(2).toLocaleString();
+                                        return label;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                });
+            } else if (incomeCtx) {
+                incomeCtx.canvas.parentNode.innerHTML = '<p class="text-center text-gray-500 py-16">No income in this period to chart.</p>';
+            }
+
+            // 3. Prepare Profitability Trend Line Data (last 12 months)
             const monthlyData = {};
             const today = new Date();
             
-            // Initialize data for the last 6 months
-            for (let i = 0; i < 6; i++) {
-                // Set to the first day of the month i months ago
+            for (let i = 0; i < 12; i++) {
                 const d = new Date(today.getFullYear(), today.getMonth() - i, 1);
                 const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
                 const label = d.toLocaleString('en-US', { month: 'short', year: 'numeric' });
@@ -1355,8 +1543,8 @@
             }
 
             // Filter transactions that fall within the 6 month window
-            const sixMonthsAgo = new Date(today.getFullYear(), today.getMonth() - 5, 1);
-            const recentTransactions = transactions.filter(t => new Date(t.date) >= sixMonthsAgo);
+            const twelveMonthsAgo = new Date(today.getFullYear(), today.getMonth() - 11, 1);
+            const recentTransactions = transactions.filter(t => new Date(t.date) >= twelveMonthsAgo);
             
             recentTransactions.forEach(t => {
                 const tDate = new Date(t.date);
@@ -1387,39 +1575,53 @@
             const monthlyLabels = sortedMonthlyData.map(d => d.label);
             const monthlyIncome = sortedMonthlyData.map(d => d.income);
             const monthlyExpense = sortedMonthlyData.map(d => d.expense);
+            const monthlyNet = sortedMonthlyData.map(d => d.net);
 
             // Destroy previous instance
             if (monthlyChart) monthlyChart.destroy();
 
             const barCtx = document.getElementById('monthly-chart')?.getContext('2d');
             if (barCtx && (monthlyIncome.some(v => v > 0) || monthlyExpense.some(v => v > 0))) {
-                monthlyChart = new Chart(barCtx, {
-                    type: 'bar',
+                 monthlyChart = new Chart(barCtx, {
+                    type: 'line',
                     data: {
                         labels: monthlyLabels,
                         datasets: [
                             {
                                 label: 'Income',
                                 data: monthlyIncome,
-                                backgroundColor: '#10b981', // Emerald green
-                                borderRadius: 4,
+                                borderColor: '#10b981',
+                                backgroundColor: '#10b981',
+                                tension: 0.3,
                             },
                             {
                                 label: 'Expense',
                                 data: monthlyExpense,
-                                backgroundColor: '#f87171', // Red
-                                borderRadius: 4,
+                                borderColor: '#f87171',
+                                backgroundColor: '#f87171',
+                                tension: 0.3,
+                            },
+                            {
+                                label: 'Net Profit',
+                                data: monthlyNet,
+                                borderColor: '#3b82f6',
+                                backgroundColor: '#3b82f6',
+                                tension: 0.3,
+                                borderDash: [5, 5], // Dashed line for net
                             }
                         ]
                     },
                     options: {
                         responsive: true,
                         maintainAspectRatio: false,
+                        interaction: {
+                            intersect: false,
+                            mode: 'index',
+                        },
                         scales: {
-                            x: { stacked: false, grid: { display: false } },
+                            x: { grid: { display: false } },
                             y: {
                                 beginAtZero: true,
-                                stacked: false,
                                 title: { display: true, text: 'Amount (KSh)', color: '#4b5563' }
                             }
                         },
@@ -1441,7 +1643,7 @@
                     }
                 });
             } else if (barCtx) {
-                 barCtx.canvas.parentNode.innerHTML = '<p class="text-center text-gray-500 py-16">No transactions in the last 6 months to chart.</p>';
+                 barCtx.canvas.parentNode.innerHTML = '<p class="text-center text-gray-500 py-16">No transactions in the last 12 months to chart.</p>';
             }
         }
 
@@ -1543,21 +1745,6 @@
                             <!-- Summary Metrics -->
                             ${renderFinancialSummary(filteredTransactions)}
 
-                            <!-- Charts Area -->
-                            <div class="mt-8 grid grid-cols-1 xl:grid-cols-3 gap-6">
-                                <div class="xl:col-span-2 bg-gray-50/80 p-4 rounded-xl border border-gray-200/90">
-                                    <h4 class="font-semibold text-gray-700 mb-3 border-b pb-2">Monthly Performance (Last 6 Months)</h4>
-                                    <div class="h-64">
-                                        <canvas id="monthly-chart"></canvas>
-                                    </div>
-                                </div>
-                                <div class="xl:col-span-1 bg-gray-50/80 p-4 rounded-xl border border-gray-200/90">
-                                    <h4 class="font-semibold text-gray-700 mb-3 border-b pb-2">Expense Breakdown by Category</h4>
-                                    <div class="h-64">
-                                        <canvas id="expense-pie-chart"></canvas>
-                                    </div>
-                                </div>
-                            </div>
                         </div>
                     </div>
                 </div>
@@ -1580,16 +1767,156 @@
             document.getElementById('filter-type').value = financeFilters.type;
             document.getElementById('filter-date-range').value = financeFilters.dateRange;
 
-            // Render charts
-            renderCharts(filteredTransactions);
+            // Note: Charts are now rendered in the Analytics tab
         }
         
+        /**
+         * Renders the Year-over-Year production comparison chart.
+         */
+        function renderYoYProductionChart(productionData, selectedType) {
+            if (yoyProductionChart) yoyProductionChart.destroy();
+
+            const ctx = document.getElementById('yoy-production-chart')?.getContext('2d');
+            if (!ctx) return;
+
+            const now = new Date();
+            const currentYear = now.getFullYear();
+            const previousYear = currentYear - 1;
+
+            const currentYearData = Array(12).fill(0);
+            const previousYearData = Array(12).fill(0);
+
+            productionData
+                .filter(p => p.type === selectedType)
+                .forEach(p => {
+                    const recordDate = new Date(p.date);
+                    const year = recordDate.getFullYear();
+                    const month = recordDate.getMonth(); // 0-11
+
+                    if (year === currentYear) {
+                        currentYearData[month] += parseFloat(p.quantity);
+                    } else if (year === previousYear) {
+                        previousYearData[month] += parseFloat(p.quantity);
+                    }
+                });
+
+            const hasData = currentYearData.some(d => d > 0) || previousYearData.some(d => d > 0);
+            if (!hasData) {
+                ctx.canvas.parentNode.innerHTML = `<p class="text-center text-gray-500 py-16">No data for "${selectedType}" in the last two years.</p>`;
+                return;
+            }
+
+            yoyProductionChart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'],
+                    datasets: [
+                        {
+                            label: `${previousYear}`,
+                            data: previousYearData,
+                            backgroundColor: '#a5b4fc', // Indigo 300
+                            borderRadius: 4,
+                        },
+                        {
+                            label: `${currentYear}`,
+                            data: currentYearData,
+                            backgroundColor: '#4f46e5', // Indigo 600
+                            borderRadius: 4,
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: { x: { grid: { display: false } }, y: { beginAtZero: true } },
+                    plugins: { legend: { position: 'top' } }
+                }
+            });
+        }
+
+        /**
+         * Renders the multi-product production trend line chart.
+         */
+        function renderProductionTrendChart(productionData, selectedTypes) {
+            if (productionTrendChart) productionTrendChart.destroy();
+
+            const ctx = document.getElementById('production-trend-chart')?.getContext('2d');
+            if (!ctx) return;
+
+            const chartColors = ['#059669', '#f59e0b', '#3b82f6', '#ef4444', '#8b5cf6'];
+            const monthlyData = {};
+            const today = new Date();
+
+            for (let i = 0; i < 12; i++) {
+                const d = new Date(today.getFullYear(), today.getMonth() - i, 1);
+                const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+                const label = d.toLocaleString('en-US', { month: 'short', year: 'numeric' });
+                monthlyData[key] = { label };
+                selectedTypes.forEach(type => monthlyData[key][type] = 0);
+            }
+
+            const twelveMonthsAgo = new Date(today.getFullYear(), today.getMonth() - 11, 1);
+            productionData
+                .filter(p => new Date(p.date) >= twelveMonthsAgo && selectedTypes.includes(p.type))
+                .forEach(p => {
+                    const tDate = new Date(p.date);
+                    const key = `${tDate.getFullYear()}-${String(tDate.getMonth() + 1).padStart(2, '0')}`;
+                    if (monthlyData[key]) {
+                        monthlyData[key][p.type] += parseFloat(p.quantity);
+                    }
+                });
+
+            const sortedMonthlyData = Object.values(monthlyData).sort((a, b) => new Date(a.label) - new Date(b.label));
+            const labels = sortedMonthlyData.map(d => d.label);
+
+            const datasets = selectedTypes.map((type, i) => ({
+                label: type,
+                data: sortedMonthlyData.map(d => d[type]),
+                borderColor: chartColors[i % chartColors.length],
+                backgroundColor: chartColors[i % chartColors.length],
+                tension: 0.3,
+                fill: false
+            }));
+
+            const hasData = datasets.some(ds => ds.data.some(d => d > 0));
+            if (!hasData) {
+                ctx.canvas.parentNode.innerHTML = `<p class="text-center text-gray-500 py-16">No data for selected products in the last 12 months.</p>`;
+                return;
+            }
+
+            productionTrendChart = new Chart(ctx, {
+                type: 'line',
+                data: { labels, datasets },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: { mode: 'index', intersect: false },
+                    scales: { x: { grid: { display: false } }, y: { beginAtZero: true, title: { display: true, text: 'Quantity' } } },
+                    plugins: { legend: { position: 'top' } }
+                }
+            });
+        }
+
+        window.handleProductionChartUpdate = function() {
+            // For YoY Chart
+            const yoySelect = document.getElementById('yoy-product-select');
+            if (yoySelect) {
+                renderYoYProductionChart(farmData.production, yoySelect.value);
+            }
+            // For Trend Chart
+            const trendCheckboxes = document.querySelectorAll('#trend-product-select input[type="checkbox"]:checked');
+            const selectedTrendTypes = Array.from(trendCheckboxes).map(cb => cb.value);
+            renderProductionTrendChart(farmData.production, selectedTrendTypes);
+        }
+
         /**
          * Renders the Production Tracking view.
          */
         function renderProduction(production) {
             const container = document.getElementById('view-production');
             const sortedProduction = production.slice().sort((a, b) => new Date(b.date) - new Date(a.date)); // Sort by date descending
+            const uniqueProductionTypes = [...new Set(production.map(p => p.type))];
+            const defaultYoYType = farmData.productionTypes[0];
             
             container.innerHTML = `
                 <h2 class="text-2xl md:text-3xl font-bold text-gray-800 mb-8">Production Tracking</h2>
@@ -1622,8 +1949,13 @@
                         </form>
                     </div>
 
+                    <!-- Production Analytics -->
+                    <div class="lg:col-span-2 space-y-8">
+                    </div>
+                </div>
+
+                <div class="mt-12">
                     <!-- Production History List -->
-                    <div class="lg:col-span-2">
                         <h3 class="text-xl font-bold mb-5 pb-3 border-b text-gray-800">Production History (${sortedProduction.length})</h3>
                         <div id="production-list-container" class="bg-card-bg p-6 rounded-2xl shadow-lg border border-gray-200/80 h-[650px] overflow-y-auto">
                             ${sortedProduction.length > 0 ? sortedProduction.map(p => {
@@ -1651,9 +1983,59 @@
                                 <p class="text-center text-gray-500 italic py-10">No production recorded yet. Use the form on the left to log your first harvest.</p>
                             `}
                         </div>
-                    </div>
                 </div>
             `;
+
+            // Note: Charts are now rendered in the Analytics tab
+        }
+
+        /**
+         * Renders the Task Status doughnut chart.
+         */
+        function renderTaskStatusChart(tasks) {
+            if (taskStatusChart) taskStatusChart.destroy();
+            const ctx = document.getElementById('task-status-chart')?.getContext('2d');
+            if (!ctx) return;
+
+            const statusCounts = tasks.reduce((acc, task) => {
+                acc[task.status] = (acc[task.status] || 0) + 1;
+                return acc;
+            }, {});
+
+            const labels = farmData.taskStatuses; // Use predefined order
+            const data = labels.map(status => statusCounts[status] || 0);
+
+            if (data.every(d => d === 0)) {
+                ctx.canvas.parentNode.innerHTML = '<p class="text-center text-gray-500 py-16">No tasks to visualize.</p>';
+                return;
+            }
+
+            const chartColors = {
+                'To Do': '#9ca3af', // Gray 400
+                'In Progress': '#60a5fa', // Blue 400
+                'Done': '#4ade80' // Green 400
+            };
+
+            taskStatusChart = new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        data: data,
+                        backgroundColor: labels.map(label => chartColors[label]),
+                        borderColor: '#ffffff',
+                        borderWidth: 3,
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { position: 'bottom', labels: { boxWidth: 12, font: { size: 12 } } },
+                        tooltip: { callbacks: { label: (c) => ` ${c.label}: ${c.parsed.toLocaleString()} tasks` } }
+                    }
+                }
+            }, 0);
         }
 
         /**
@@ -1723,7 +2105,7 @@
 
                     <!-- Task List -->
                     <div class="lg:col-span-2">
-                        <h3 class="text-xl font-bold mb-5 pb-3 border-b text-gray-800">Current Tasks (${sortedTasks.length})</h3>
+                        <h3 class="text-xl font-bold mb-5 pb-3 border-b text-gray-800">Task Details (${sortedTasks.length})</h3>
                         <div class="bg-card-bg p-6 rounded-2xl shadow-lg border border-gray-200/80">
                             <div class="space-y-4">
                                 ${sortedTasks.length > 0 ? sortedTasks.map(task => `
@@ -1757,6 +2139,8 @@
                     </div>
                 </div>
             `;
+
+            // Note: Chart is now rendered in the Analytics tab
         }
 
         /**
@@ -1858,6 +2242,109 @@
                     </div>
                 </div>
             `;
+        }
+
+        /**
+         * Renders the new central Analytics view.
+         */
+        function renderAnalytics() {
+            const container = document.getElementById('view-analytics');
+            const defaultYoYType = farmData.productionTypes[0];
+
+            container.innerHTML = `
+                <h2 class="text-2xl md:text-3xl font-bold text-gray-800 mb-8">Farm Analytics Center</h2>
+                <div class="space-y-12">
+
+                    <!-- Financial Analytics -->
+                    <section>
+                        <h3 class="text-xl font-bold mb-5 pb-3 border-b text-gray-800">Financial Analytics</h3>
+                        <div class="bg-card-bg p-6 rounded-2xl shadow-lg border border-gray-200/80">
+                            <div class="bg-gray-50/80 p-4 rounded-xl border border-gray-200/90 mb-6">
+                                <h4 class="font-semibold text-gray-700 mb-3 border-b pb-2">Profitability Trend (Last 12 Months)</h4>
+                                <div class="h-80">
+                                    <canvas id="monthly-chart"></canvas>
+                                </div>
+                            </div>
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                <div class="bg-gray-50/80 p-4 rounded-xl border border-gray-200/90">
+                                    <h4 class="font-semibold text-gray-700 mb-3 border-b pb-2">Income Source Breakdown</h4>
+                                    <div class="h-64">
+                                        <canvas id="income-pie-chart"></canvas>
+                                    </div>
+                                </div>
+                                <div class="bg-gray-50/80 p-4 rounded-xl border border-gray-200/90">
+                                    <h4 class="font-semibold text-gray-700 mb-3 border-b pb-2">Expense Breakdown by Category</h4>
+                                    <div class="h-64">
+                                        <canvas id="expense-pie-chart"></canvas>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+
+                    <!-- Livestock Analytics -->
+                    <section>
+                        <h3 class="text-xl font-bold mb-5 pb-3 border-b text-gray-800">Livestock Analytics</h3>
+                        <div class="grid grid-cols-1 xl:grid-cols-5 gap-6">
+                            <div class="xl:col-span-3 bg-card-bg p-6 rounded-2xl shadow-lg border border-gray-200/80">
+                                <h4 class="font-semibold text-gray-700 mb-3 border-b pb-2">Population Growth (Last 12 Months)</h4>
+                                <div class="h-64">
+                                    <canvas id="population-growth-chart"></canvas>
+                                </div>
+                            </div>
+                            <div class="xl:col-span-2 bg-card-bg p-6 rounded-2xl shadow-lg border border-gray-200/80">
+                                <h4 class="font-semibold text-gray-700 mb-3 border-b pb-2">Herd Composition</h4>
+                                <div class="h-64">
+                                    <canvas id="livestock-composition-chart"></canvas>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+
+                    <!-- Production Analytics -->
+                    <section>
+                        <h3 class="text-xl font-bold mb-5 pb-3 border-b text-gray-800">Production Analytics</h3>
+                        <div class="space-y-8">
+                            <div class="bg-card-bg p-6 rounded-2xl shadow-lg border border-gray-200/80">
+                                <div class="flex justify-between items-center mb-4 border-b pb-3">
+                                    <h4 class="font-semibold text-gray-700">Year-Over-Year Comparison</h4>
+                                    <select id="yoy-product-select" onchange="handleProductionChartUpdate()" class="input-focus p-1 border border-gray-300 rounded-lg text-xs">
+                                        ${farmData.productionTypes.map(t => `<option value="${t}" ${t === defaultYoYType ? 'selected' : ''}>${t}</option>`).join('')}
+                                    </select>
+                                </div>
+                                <div class="h-64">
+                                    <canvas id="yoy-production-chart"></canvas>
+                                </div>
+                            </div>
+                            <div class="bg-card-bg p-6 rounded-2xl shadow-lg border border-gray-200/80">
+                                 <div class="flex justify-between items-center mb-4 border-b pb-3">
+                                    <h4 class="font-semibold text-gray-700">Production Trends (Last 12 Months)</h4>
+                                    <div id="trend-product-select" class="flex items-center space-x-3">
+                                        ${farmData.productionTypes.map((type, i) => `
+                                            <label class="flex items-center text-xs">
+                                                <input type="checkbox" value="${type}" onchange="handleProductionChartUpdate()" class="h-4 w-4 rounded border-gray-300 text-primary-green focus:ring-primary-green" ${i < 2 ? 'checked' : ''}>
+                                                <span class="ml-1.5">${type.split(' ')[0]}</span>
+                                            </label>
+                                        `).join('')}
+                                    </div>
+                                </div>
+                                <div class="h-64">
+                                    <canvas id="production-trend-chart"></canvas>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+                </div>
+            `;
+
+            // Render all charts
+            setTimeout(() => {
+                renderCharts(farmData.transactions);
+                renderLivestockCompositionChart(farmData.livestock);
+                renderPopulationGrowthChart(farmData.livestock);
+                handleProductionChartUpdate();
+                renderTaskStatusChart(farmData.tasks);
+            }, 0);
         }
 
         /**
