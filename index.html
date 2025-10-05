@@ -103,8 +103,26 @@
         </header>
 
         <!-- Navigation Tabs -->
-        <nav class="border-b-2 border-gray-200 mb-8">
-            <div class="flex space-x-4 md:space-x-8 overflow-x-auto pb-2 -mb-2 nav-scrollbar">
+        <nav class="border-b-2 border-gray-200 mb-8 relative">
+            <!-- Mobile Navigation Dropdown (Hidden on md and up) -->
+            <div class="md:hidden">
+                <button onclick="toggleNavDropdown()" id="nav-dropdown-button" class="w-full flex justify-between items-center py-3 px-4 border border-gray-300 rounded-lg bg-white text-left">
+                    <span id="nav-dropdown-label" class="font-semibold text-gray-700">Dashboard</span>
+                    <svg class="w-5 h-5 text-gray-500 transform transition-transform" id="nav-dropdown-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                </button>
+                <div id="nav-dropdown-menu" class="hidden absolute top-full left-0 w-full mt-1 bg-white rounded-lg shadow-xl border border-gray-200 z-20">
+                    <a onclick="selectNavDropdownItem('dashboard')" class="block px-4 py-3 text-gray-700 hover:bg-gray-100" data-nav="dashboard">Dashboard</a>
+                    <a onclick="selectNavDropdownItem('livestock')" class="block px-4 py-3 text-gray-700 hover:bg-gray-100" data-nav="livestock">Livestock</a>
+                    <a onclick="selectNavDropdownItem('finance')" class="block px-4 py-3 text-gray-700 hover:bg-gray-100" data-nav="finance">Finance</a>
+                    <a onclick="selectNavDropdownItem('production')" class="block px-4 py-3 text-gray-700 hover:bg-gray-100" data-nav="production">Production</a>
+                    <a onclick="selectNavDropdownItem('tasks')" class="block px-4 py-3 text-gray-700 hover:bg-gray-100" data-nav="tasks">Tasks</a>
+                    <a onclick="selectNavDropdownItem('inventory')" class="block px-4 py-3 text-gray-700 hover:bg-gray-100" data-nav="inventory">Inventory</a>
+                    <a onclick="selectNavDropdownItem('animalhub')" class="block px-4 py-3 text-gray-700 hover:bg-gray-100" data-nav="animalhub">Animal Hub</a>
+                    <a onclick="selectNavDropdownItem('equipment')" class="block px-4 py-3 text-gray-700 hover:bg-gray-100" data-nav="equipment">Equipment</a>
+                </div>
+            </div>
+            <!-- Desktop Navigation (Visible on md and up) -->
+            <div class="hidden md:flex space-x-4 md:space-x-8 overflow-x-auto pb-2 -mb-2 nav-scrollbar">
                 <button onclick="changeView('dashboard')" id="tab-dashboard" class="py-3 px-3 text-gray-600 hover:text-primary-green transition duration-200 whitespace-nowrap active-tab">Dashboard</button>
                 <button onclick="changeView('livestock')" id="tab-livestock" class="py-3 px-3 text-gray-600 hover:text-primary-green transition duration-200 whitespace-nowrap">Livestock</button>
                 <button onclick="changeView('finance')" id="tab-finance" class="py-3 px-3 text-gray-600 hover:text-primary-green transition duration-200 whitespace-nowrap">Finance</button>
@@ -752,6 +770,10 @@
 
             document.querySelectorAll('[id^="tab-"]').forEach(el => el.classList.remove('active-tab'));
             document.getElementById(`tab-${viewName}`).classList.add('active-tab');
+
+            // Update mobile dropdown label
+            const dropdownLabel = document.getElementById('nav-dropdown-label');
+            if (dropdownLabel) dropdownLabel.textContent = document.getElementById(`tab-${viewName}`).textContent;
 
             // Explicitly destroy charts when leaving the finance view to avoid memory leaks
             if (viewName !== 'finance') {
@@ -2542,6 +2564,30 @@
             if (modalType === 'edit') {
                 currentEditingRecord = null; // Clear editing state
             }
+        }
+
+        /**
+         * Toggles the mobile navigation dropdown menu.
+         */
+        window.toggleNavDropdown = function() {
+            const menu = document.getElementById('nav-dropdown-menu');
+            const icon = document.getElementById('nav-dropdown-icon');
+            menu.classList.toggle('hidden');
+            icon.classList.toggle('rotate-180');
+        }
+
+        /**
+         * Handles item selection from the mobile navigation dropdown.
+         */
+        window.selectNavDropdownItem = function(viewName) {
+            // Change the view
+            changeView(viewName);
+
+            // Close the dropdown
+            const menu = document.getElementById('nav-dropdown-menu');
+            const icon = document.getElementById('nav-dropdown-icon');
+            menu.classList.add('hidden');
+            icon.classList.remove('rotate-180');
         }
 
         // Execute initialization when the DOM is ready
