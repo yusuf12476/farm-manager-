@@ -301,20 +301,21 @@
         /**
          * Renders the Breeding Tracker view content.
          */
-        function renderBreedingTracker() {
+        function renderBreedingTracker(formState = {}) {
             const records = farmData.breeding;
-            const newRecordDueDate = calculateDueDate(document.getElementById('breeding-service-date')?.value, document.getElementById('breeding-species')?.value);
-
+            const serviceDate = formState.serviceDate || new Date().toISOString().substring(0, 10);
+            const species = formState.species || farmData.animalSpecies[0];
+            const newRecordDueDate = calculateDueDate(serviceDate, species);
             return `
                 <div class="bg-card-bg p-8 rounded-2xl shadow-lg border border-gray-200/80 mb-8">
                     <h3 class="text-xl font-bold mb-5 border-b pb-3 text-gray-800">Add New Service Record</h3>
                     <form id="add-breeding-form" onsubmit="event.preventDefault(); handleAddBreedingRecord();" class="space-y-4">
                         <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
                             <input type="text" id="breeding-animal-id" required placeholder="Animal ID (e.g., Cow #102)" class="input-focus w-full p-3 border border-gray-300 rounded-lg">
-                            <select id="breeding-species" required class="input-focus w-full p-3 border border-gray-300 rounded-lg" onchange="renderAnimalHub('breeding')">
-                                ${farmData.animalSpecies.map(s => `<option value="${s}">${s}</option>`).join('')}
+                            <select id="breeding-species" required class="input-focus w-full p-3 border border-gray-300 rounded-lg" onchange="handleBreedingFormChange()">
+                                ${farmData.animalSpecies.map(s => `<option value="${s}" ${s === species ? 'selected' : ''}>${s}</option>`).join('')}
                             </select>
-                            <input type="date" id="breeding-service-date" required class="input-focus w-full p-3 border border-gray-300 rounded-lg" value="${new Date().toISOString().substring(0, 10)}" onchange="renderAnimalHub('breeding')">
+                            <input type="date" id="breeding-service-date" required class="input-focus w-full p-3 border border-gray-300 rounded-lg" value="${serviceDate}" onchange="handleBreedingFormChange()">
                             <button type="submit" class="w-full bg-primary-green text-white py-3 rounded-lg font-bold hover:bg-primary-green-dark transition shadow-md">Log Service</button>
                         </div>
                         <div>
@@ -432,7 +433,7 @@
         /**
          * Renders the main Animal Hub view with sub-tabs.
          */
-        function renderAnimalHub(activeSubView = 'breeding') {
+        function renderAnimalHub(activeSubView = 'breeding', breedingFormState = {}) {
             const container = document.getElementById('view-animalhub');
             
             const getSubTabClass = (tabName) => activeSubView === tabName 
@@ -441,7 +442,7 @@
 
             let contentHtml = '';
             if (activeSubView === 'breeding') {
-                contentHtml = renderBreedingTracker();
+                contentHtml = renderBreedingTracker(breedingFormState);
             } else { // 'health'
                 contentHtml = renderHealthTracker();
             }
@@ -465,6 +466,12 @@
                     ${contentHtml}
                 </div>
             `;
+        }
+
+        window.handleBreedingFormChange = function() {
+            const serviceDate = document.getElementById('breeding-service-date')?.value;
+            const species = document.getElementById('breeding-species')?.value;
+            renderAnimalHub('breeding', { serviceDate, species });
         }
 
         window.handleAddBreedingRecord = function() {
