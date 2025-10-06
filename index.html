@@ -1879,15 +1879,23 @@
             const datasets = selectedTypes.map((type, i) => ({
                 label: type,
                 data: sortedMonthlyData.map(d => d[type]),
-                borderColor: chartColors[i % chartColors.length],
-                backgroundColor: chartColors[i % chartColors.length],
+                borderColor: chartColors[i % chartColors.length] + '99', // Add some transparency
+                backgroundColor: chartColors[i % chartColors.length] + '20', // Lighter fill
                 tension: 0.3,
-                fill: false
+                fill: true,
+                pointBackgroundColor: chartColors[i % chartColors.length],
+                pointRadius: 4,
+                pointHoverRadius: 6,
+                borderWidth: 2,
+
             }));
 
             const hasData = datasets.some(ds => ds.data.some(d => d > 0));
             if (!hasData) {
-                ctx.canvas.parentNode.innerHTML = `<p class="text-center text-gray-500 py-16">No data for selected products in the last 12 months.</p>`;
+                // Instead of destroying the canvas, show a message in the parent.
+                const parent = ctx.canvas.parentNode;
+                parent.querySelector('#production-trend-no-data')?.classList.remove('hidden');
+                ctx.canvas.classList.add('hidden');
                 return;
             }
 
@@ -1897,7 +1905,10 @@
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
-                    interaction: { mode: 'index', intersect: false },
+                    interaction: { 
+                        mode: 'index', 
+                        intersect: false 
+                    },
                     scales: { x: { grid: { display: false } }, y: { beginAtZero: true, title: { display: true, text: 'Quantity' } } },
                     plugins: { legend: { position: 'top' } }
                 }
@@ -2335,7 +2346,10 @@
                                         `).join('')}
                                     </div>
                                 </div>
-                                <div class="h-64">
+                                <div class="h-64 relative">
+                                    <div id="production-trend-no-data" class="absolute inset-0 flex items-center justify-center hidden">
+                                        <p class="text-center text-gray-500 py-16">No data for selected products in the last 12 months.</p>
+                                    </div>
                                     <canvas id="production-trend-chart"></canvas>
                                 </div>
                             </div>
@@ -2350,6 +2364,12 @@
                 renderLivestockCompositionChart(farmData.livestock);
                 renderPopulationGrowthChart(farmData.livestock);
                 handleProductionChartUpdate();
+                // Ensure the "no data" message is hidden and canvas is visible on initial load
+                const trendChartCanvas = document.getElementById('production-trend-chart');
+                if (trendChartCanvas) {
+                    trendChartCanvas.classList.remove('hidden');
+                    trendChartCanvas.parentNode.querySelector('#production-trend-no-data')?.classList.add('hidden');
+                }
                 renderTaskStatusChart(farmData.tasks);
             }, 0);
         }
