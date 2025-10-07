@@ -264,12 +264,15 @@
         let currentEditingRecord = null; // Stores the id and collection of the record being edited
 
         // Global filter state and chart instances for Finance tab
-        let financeFilters = {
-            type: 'all', // 'all', 'income', 'expense'
-            category: 'all', // 'all' or specific category name (currently not implemented in filter UI but available for future use)
-            dateRange: 'all', // 'all', '30d', '90d', 'custom'
-            startDate: null,
-            endDate: null
+        let viewFilters = {
+            finance: {
+                type: 'all',
+                category: 'all',
+                dateRange: 'all',
+                startDate: null,
+                endDate: null
+            },
+            tasks: { isOverdue: false }
         };
         let expenseChart = null;
         let monthlyChart = null;
@@ -280,6 +283,7 @@
         let populationGrowthChart = null;
         let taskStatusChart = null;
 
+        let profitabilityForecastChart = null;
         // Inactivity timer state
         let inactivityTimer;
         const INACTIVITY_TIMEOUT = 15 * 60 * 1000; // 15 minutes
@@ -322,12 +326,11 @@
          * Loads the finance filter state from localStorage.
          */
         function loadFiltersFromLocalStorage() {
-            const storedFilters = localStorage.getItem('farmFinanceFilters');
+            const storedFilters = localStorage.getItem('farmViewFilters');
             if (storedFilters) {
                 try {
                     const loadedFilters = JSON.parse(storedFilters);
-                    // Merge with defaults to ensure new filter properties are not missed
-                    financeFilters = { ...financeFilters, ...loadedFilters };
+                    viewFilters = { ...viewFilters, ...loadedFilters };
                 } catch (e) { console.error("Could not parse finance filters from localStorage", e); }
             }
         }
@@ -613,72 +616,6 @@
             renderAnimalHub('breeding', { serviceDate, species });
         }
 
-        window.handleAddBreedingRecord = function() {
-            const animalId = document.getElementById('breeding-animal-id').value.trim();
-            const species = document.getElementById('breeding-species').value;
-            const serviceDate = document.getElementById('breeding-service-date').value;
-            const msgEl = document.getElementById('breeding-msg');
-
-            if (!animalId || !species || !serviceDate) {
-                msgEl.textContent = 'Please fill all fields.';
-                msgEl.className = 'text-center mt-3 text-sm text-red-500 font-medium';
-                return;
-            }
-
-            const record = {
-                id: Date.now().toString(),
-                animalId,
-                species,
-                serviceDate,
-                status: 'In Calf/Farrow', // Default status
-                expectedDueDate: calculateDueDate(serviceDate, species),
-                createdAt: new Date().toISOString()
-            };
-
-            farmData.breeding.push(record);
-            farmData.breeding.sort((a, b) => new Date(b.serviceDate) - new Date(a.serviceDate));
-            // TODO: API call to save
-            renderAnimalHub('breeding');
-
-            msgEl.textContent = `Breeding record for ${animalId} added.`;
-            msgEl.className = 'text-center mt-3 text-sm text-green-600 font-medium';
-            setTimeout(() => msgEl.textContent = '', 3000);
-        }
-
-        window.handleAddHealthRecord = function() {
-            const animalId = document.getElementById('health-animal-id').value.trim();
-            const recordDate = document.getElementById('health-record-date').value;
-            const diagnosis = document.getElementById('health-diagnosis').value.trim();
-            const treatment = document.getElementById('health-treatment').value.trim();
-            const veterinarian = document.getElementById('health-vet').value.trim();
-            const msgEl = document.getElementById('health-msg');
-
-            if (!animalId || !recordDate || !diagnosis) {
-                msgEl.textContent = 'Animal ID, Date, and Diagnosis are required.';
-                msgEl.className = 'text-center mt-3 text-sm text-red-500 font-medium';
-                return;
-            }
-
-            const record = {
-                id: Date.now().toString(),
-                animalId,
-                recordDate,
-                diagnosis,
-                treatment,
-                veterinarian,
-                createdAt: new Date().toISOString()
-            };
-
-            farmData.health.push(record);
-            farmData.health.sort((a, b) => new Date(b.recordDate) - new Date(a.recordDate));
-            // TODO: API call to save
-            renderAnimalHub('health');
-
-            msgEl.textContent = `Health record for ${animalId} added.`;
-            msgEl.className = 'text-center mt-3 text-sm text-green-600 font-medium';
-            setTimeout(() => msgEl.textContent = '', 3000);
-        }
-
         window.handleAddBreedingRecord = async function() {
             const animalId = document.getElementById('breeding-animal-id').value.trim();
             const species = document.getElementById('breeding-species').value;
@@ -711,6 +648,7 @@
         }
 
         window.handleAddHealthRecord = async function() {
+            const animalId = document.getElementById('health-animal-id').value.trim();
             const recordDate = document.getElementById('health-record-date').value;
             const diagnosis = document.getElementById('health-diagnosis').value.trim();
             const treatment = document.getElementById('health-treatment').value.trim();
@@ -1017,6 +955,7 @@
                  if (livestockCompositionChart) { livestockCompositionChart.destroy(); livestockCompositionChart = null; }
                  if (populationGrowthChart) { populationGrowthChart.destroy(); populationGrowthChart = null; }
                  if (taskStatusChart) { taskStatusChart.destroy(); taskStatusChart = null; }
+                 if (profitabilityForecastChart) { profitabilityForecastChart.destroy(); profitabilityForecastChart = null; }
             }
 
             // Render the content of the view when switching to it
@@ -1030,6 +969,18 @@
             if (viewName === 'analytics') renderAnalytics();
             if (viewName === 'settings') renderSettings();
             if (viewName === 'dashboard') renderDashboard(farmData.livestock, farmData.transactions, farmData.production, farmData.tasks, farmData.inventory, farmData.equipment);
+        }
+
+        /**
+         * Navigates to a view with pre-applied filters.
+         * @param {string} viewName The name of the view to navigate to.
+         * @param {object} filters The filters to apply to that view's state.
+         */
+        window.navigateTo = function(viewName, filters = {}) {
+            // Reset other filters if needed, or merge. For now, we just set.
+            viewFilters[viewName] = { ...viewFilters[viewName], ...filters };
+            localStorage.setItem('farmViewFilters', JSON.stringify(viewFilters));
+            changeView(viewName);
         }
 
         /**
@@ -1050,16 +1001,16 @@
 
             let overdueTasksHtml = overdueTasks.map(task => `
                 <div class="flex items-center justify-between p-3 bg-red-50/80 rounded-lg border border-red-200/90 hover:bg-red-100/50 transition-colors duration-200">
-                    <div>
+                    <div class="cursor-pointer flex-grow" onclick="navigateTo('tasks', { isOverdue: true })">
                         <p class="font-semibold text-red-800">${task.title}</p>
                         <p class="text-xs text-red-600 font-bold">Due: ${task.dueDate}</p>
                     </div>
-                    <button onclick="changeView('tasks')" class="text-xs font-medium text-blue-600 hover:underline">Go to Tasks</button>
+                    <button onclick="navigateTo('tasks', { isOverdue: true })" class="text-xs font-medium text-blue-600 hover:underline">View All</button>
                 </div>
             `).join('');
 
             const overdueTasksCard = overdueTasks.length > 0 ? `
-                <div class="bg-red-50/60 p-6 rounded-2xl shadow-md border-2 border-red-200/80 mb-10">
+                <div class="bg-red-50/60 p-6 rounded-2xl shadow-md border-2 border-red-200/80 mb-10 cursor-pointer hover:shadow-xl transition-shadow" onclick="navigateTo('tasks', { isOverdue: true })">
                     <h3 class="text-xl font-semibold text-red-700 mb-4 flex items-center"><svg class="w-6 h-6 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>Overdue Tasks (${overdueTasks.length})</h3>
                     <div class="space-y-3">${overdueTasksHtml}</div>
                 </div>` : '';
@@ -1080,7 +1031,7 @@
 
             let productionHtml = Object.entries(productionSummary)
                 .map(([type, data]) => `
-                    <div class="p-5 bg-card-bg border-l-4 border-secondary-yellow rounded-lg shadow-sm hover:shadow-md transition-shadow duration-200">
+                    <div class="p-5 bg-card-bg border-l-4 border-secondary-yellow rounded-lg shadow-sm hover:shadow-md transition-shadow duration-200 cursor-pointer" onclick="changeView('production')">
                         <p class="text-sm text-gray-500 font-medium">${type} (Last 30 Days)</p>
                         <p class="text-3xl font-bold text-gray-800 mt-1">${data.total.toLocaleString(undefined, { maximumFractionDigits: 1 })} <span class="text-xl text-secondary-yellow">${data.unit}</span></p>
                     </div>
@@ -1103,7 +1054,7 @@
             const totalAnimals = livestock.reduce((sum, item) => sum + item.count, 0);
 
             let livestockHtml = Object.entries(livestockCounts)
-                .map(([type, count]) => `<span class="inline-flex items-center px-3 py-1 text-sm font-medium bg-primary-green/10 text-primary-green-dark rounded-full border border-primary-green/20">${type.charAt(0).toUpperCase() + type.slice(1)}: <span class="font-bold ml-1.5">${count}</span></span>`)
+                .map(([type, count]) => `<span class="inline-flex items-center px-3 py-1 text-sm font-medium bg-primary-green/10 text-primary-green-dark rounded-full border border-primary-green/20 cursor-pointer hover:bg-primary-green/20" onclick="changeView('livestock')">${type.charAt(0).toUpperCase() + type.slice(1)}: <span class="font-bold ml-1.5">${count}</span></span>`)
                 .join('');
             
             if (livestockHtml === '') {
@@ -1134,7 +1085,7 @@
                 const isOverdue = new Date(task.dueDate) < new Date(new Date().toDateString()); // Compare date part only
                 const dateColor = isOverdue ? 'text-red-600 font-bold' : 'text-gray-600 font-medium';
                 return `
-                    <div class="flex items-center justify-between p-3 bg-gray-50/80 rounded-lg border border-gray-200/90 hover:bg-white transition-colors duration-200">
+                    <div class="flex items-center justify-between p-3 bg-gray-50/80 rounded-lg border border-gray-200/90 hover:bg-white transition-colors duration-200 cursor-pointer" onclick="changeView('tasks')">
                         <div>
                             <p class="font-semibold text-gray-800">${task.title}</p>
                             <p class="text-xs ${dateColor}">Due: ${task.dueDate}</p>
@@ -1161,7 +1112,7 @@
                 const dueText = daysRemaining === 0 ? 'Due Today' : `${daysRemaining} days`;
                 const dueColor = daysRemaining <= 7 ? 'text-red-600 font-bold' : 'text-blue-600 font-medium';
                 return `
-                    <div class="flex items-center justify-between p-3 bg-gray-50/80 rounded-lg border border-gray-200/90 hover:bg-white transition-colors duration-200">
+                    <div class="flex items-center justify-between p-3 bg-gray-50/80 rounded-lg border border-gray-200/90 hover:bg-white transition-colors duration-200 cursor-pointer" onclick="navigateTo('animalhub')">
                         <div>
                             <p class="font-semibold text-gray-800">${birth.animalId} <span class="text-sm font-normal text-gray-500">(${birth.species})</span></p>
                             <p class="text-xs text-gray-600">Due: ${birth.expectedDueDate}</p>
@@ -1172,7 +1123,7 @@
             }).join('');
 
             const upcomingBirthsCard = upcomingBirths.length > 0 ? `
-                <div class="lg:col-span-2 bg-card-bg p-8 rounded-2xl shadow-lg border border-gray-200/80">
+                <div class="lg:col-span-2 bg-card-bg p-8 rounded-2xl shadow-lg border border-gray-200/80 cursor-pointer hover:shadow-xl transition-shadow" onclick="navigateTo('animalhub')">
                     <h3 class="text-xl font-semibold text-gray-700 mb-5 flex items-center">Upcoming Births (Next 30 Days)</h3>
                     <div class="space-y-3">${birthsHtml}</div>
                 </div>` : '';
@@ -1184,16 +1135,16 @@
 
             let lowStockHtml = lowStockItems.map(item => `
                 <div class="flex items-center justify-between p-3 bg-red-50/80 rounded-lg border border-red-200/90 hover:bg-red-100/50 transition-colors duration-200">
-                    <div>
+                    <div class="cursor-pointer flex-grow" onclick="navigateTo('inventory')">
                         <p class="font-semibold text-red-800">${item.name}</p>
                         <p class="text-xs text-red-600">Current: ${item.quantity} ${item.unit} | Alert Level: ${item.lowStockThreshold} ${item.unit}</p>
                     </div>
-                    <button onclick="changeView('inventory')" class="text-xs font-medium text-blue-600 hover:underline">View</button>
+                    <button onclick="navigateTo('inventory')" class="text-xs font-medium text-blue-600 hover:underline">View All</button>
                 </div>
             `).join('');
 
             const lowStockCard = lowStockItems.length > 0 ? `
-                <div class="bg-red-50/60 p-6 rounded-2xl shadow-md border-2 border-red-200/80 mb-10">
+                <div class="bg-red-50/60 p-6 rounded-2xl shadow-md border-2 border-red-200/80 mb-10 cursor-pointer hover:shadow-xl transition-shadow" onclick="navigateTo('inventory')">
                     <h3 class="text-xl font-semibold text-red-700 mb-4 flex items-center">
                         <svg class="w-6 h-6 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
                         Low Stock Alerts
@@ -1225,17 +1176,17 @@
                 <!-- Multi-Card Section -->
                 <div class="grid grid-cols-1 lg:grid-cols-5 gap-10 mb-10">
                     <!-- Livestock Summary Card (lg:col-span-3) -->
-                    <div class="lg:col-span-3 bg-card-bg p-8 rounded-2xl shadow-lg border border-gray-200/80">
+                    <div class="lg:col-span-3 bg-card-bg p-8 rounded-2xl shadow-lg border border-gray-200/80 cursor-pointer hover:shadow-xl transition-shadow" onclick="changeView('livestock')">
                         <h3 class="text-xl font-semibold text-gray-700 mb-5 flex items-center">
                             <svg class="w-6 h-6 mr-3 text-primary-green" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-4m0 0l-3 3m3-3l3 3m0 0V9a2 2 0 00-2-2H5a2 2 0 00-2 2v8l3-3m3-3v4m0 0l-3-3m3 3l3-3m0 0V9a2 2 0 012-2h4a2 2 0 012 2v8l-3-3m-3 3v-4"></path></svg>
                             Livestock Overview (All Time)
                         </h3>
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-                            <div class="p-5 bg-primary-green/10 rounded-lg border-l-4 border-primary-green shadow-sm">
+                            <div class="p-5 bg-primary-green/10 rounded-lg border-l-4 border-primary-green shadow-sm hover:bg-primary-green/20">
                                 <p class="text-sm text-gray-600 font-medium">Total Head Count</p>
                                 <p class="text-3xl font-bold text-gray-800 mt-1">${totalAnimals.toLocaleString()}</p>
                             </div>
-                            <div class="p-5 bg-primary-green/10 rounded-lg border-l-4 border-primary-green shadow-sm">
+                            <div class="p-5 bg-primary-green/10 rounded-lg border-l-4 border-primary-green shadow-sm hover:bg-primary-green/20">
                                 <p class="text-sm text-gray-600 font-medium">Unique Types Tracked</p>
                                 <p class="text-3xl font-bold text-gray-800 mt-1">${Object.keys(livestockCounts).length}</p>
                             </div>
@@ -1247,7 +1198,7 @@
                     </div>
 
                     <!-- Upcoming Tasks Card (lg:col-span-2) -->
-                    <div class="lg:col-span-2 bg-card-bg p-8 rounded-2xl shadow-lg border border-gray-200/80">
+                    <div class="lg:col-span-2 bg-card-bg p-8 rounded-2xl shadow-lg border border-gray-200/80 cursor-pointer hover:shadow-xl transition-shadow" onclick="navigateTo('tasks', { isOverdue: false })">
                         <h3 class="text-xl font-semibold text-gray-700 mb-5 flex items-center">
                             <svg class="w-6 h-6 mr-3 text-secondary-yellow" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"></path></svg>
                             Upcoming Tasks
@@ -1267,17 +1218,17 @@
                         Financial Performance (All Time)
                     </h3>
                     <div class="grid grid-cols-1 md:grid-cols-3 gap-6 text-center">
-                        <div class="p-5 bg-green-50 rounded-lg border-l-4 border-green-500 shadow-sm">
+                        <div class="p-5 bg-green-50 rounded-lg border-l-4 border-green-500 shadow-sm cursor-pointer hover:bg-green-100" onclick="navigateTo('finance', { type: 'income', dateRange: 'all' })">
                             <p class="text-sm text-green-700 font-medium">Total Income</p>
                             <p class="text-2xl font-bold text-green-600 mt-1">KSh ${totalIncome.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</p>
                         </div>
-                        <div class="p-5 bg-red-50 rounded-lg border-l-4 border-red-500 shadow-sm">
+                        <div class="p-5 bg-red-50 rounded-lg border-l-4 border-red-500 shadow-sm cursor-pointer hover:bg-red-100" onclick="navigateTo('finance', { type: 'expense', dateRange: 'all' })">
                             <p class="text-sm text-red-700 font-medium">Total Expenses</p>
                             <p class="text-2xl font-bold text-red-600 mt-1">KSh ${totalExpense.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</p>
                         </div>
-                        <div class="p-5 ${netBg} rounded-lg border-l-4 ${netProfit >= 0 ? 'border-green-500' : 'border-red-500'} shadow-sm">
+                        <div class="p-5 ${netBg} rounded-lg border-l-4 ${netProfit >= 0 ? 'border-green-500' : 'border-red-500'} shadow-sm cursor-pointer hover:bg-gray-100" onclick="navigateTo('finance', { type: 'all', dateRange: 'all' })">
                             <p class="text-sm text-gray-700 font-medium">Net Profit/Loss</p>
-                            <p class="text-2xl font-bold ${netColor} mt-1">KSh ${netProfit.toFixed(2).toLocaleString()}</p>
+                            <p class="text-2xl font-bold ${netColor} mt-1">KSh ${netProfit.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</p>
                         </div>
                     </div>
                 </div>
@@ -1543,7 +1494,7 @@
          * Applies filters to the raw transactions data.
          */
         function filterTransactions(transactions, filters) {
-            let filtered = transactions;
+            let filtered = [...transactions];
 
             // Filter by Type
             if (filters.type !== 'all') {
@@ -1601,7 +1552,7 @@
          * Updates the filter state and re-renders the finance view.
          */
         window.updateFinanceFilter = function(key, value) {
-            financeFilters[key] = value;
+            viewFilters.finance[key] = value;
             
             // Handle custom date visibility
             const startContainer = document.getElementById('custom-date-start-container');
@@ -1615,23 +1566,23 @@
                     startContainer?.classList.remove('hidden');
                     endContainer?.classList.remove('hidden');
                     // Reset custom date values if they were empty
-                    if (startDateInput && !financeFilters.startDate) financeFilters.startDate = startDateInput.value;
-                    if (endDateInput && !financeFilters.endDate) financeFilters.endDate = endDateInput.value;
+                    if (startDateInput && !viewFilters.finance.startDate) viewFilters.finance.startDate = startDateInput.value;
+                    if (endDateInput && !financeFilters.finance.endDate) viewFilters.finance.endDate = endDateInput.value;
                 } else {
                     startContainer?.classList.add('hidden');
                     endContainer?.classList.add('hidden');
                     // Clear custom dates if switching away
-                    financeFilters.startDate = null;
-                    financeFilters.endDate = null;
+                    viewFilters.finance.startDate = null;
+                    viewFilters.finance.endDate = null;
                 }
             }
             
             // If the inputs exist, ensure they reflect the latest state before re-render
-            if (key === 'startDate') financeFilters.startDate = value;
-            if (key === 'endDate') financeFilters.endDate = value;
+            if (key === 'startDate') viewFilters.finance.startDate = value;
+            if (key === 'endDate') viewFilters.finance.endDate = value;
 
             // Persist the filter state to localStorage
-            localStorage.setItem('farmFinanceFilters', JSON.stringify(financeFilters));
+            localStorage.setItem('farmViewFilters', JSON.stringify(viewFilters));
 
 
             // Re-render the finance view with new filters applied
@@ -1871,6 +1822,81 @@
             }
         }
 
+        /**
+         * Renders the Profitability Forecast chart using linear regression.
+         */
+        function renderProfitabilityForecastChart(transactions) {
+            if (profitabilityForecastChart) profitabilityForecastChart.destroy();
+            const ctx = document.getElementById('profitability-forecast-chart')?.getContext('2d');
+            if (!ctx) return;
+
+            // 1. Calculate historical monthly net profit (last 12 months)
+            const monthlyData = {};
+            const today = new Date();
+            for (let i = 0; i < 12; i++) {
+                const d = new Date(today.getFullYear(), today.getMonth() - i, 1);
+                const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+                monthlyData[key] = { label: d.toLocaleString('en-US', { month: 'short', year: 'numeric' }), net: 0 };
+            }
+
+            const twelveMonthsAgo = new Date(today.getFullYear(), today.getMonth() - 11, 1);
+            transactions.filter(t => new Date(t.date) >= twelveMonthsAgo).forEach(t => {
+                const tDate = new Date(t.date);
+                const key = `${tDate.getFullYear()}-${String(tDate.getMonth() + 1).padStart(2, '0')}`;
+                if (monthlyData[key]) {
+                    monthlyData[key].net += t.type === 'income' ? parseFloat(t.amount) : -parseFloat(t.amount);
+                }
+            });
+
+            const sortedHistoricalData = Object.values(monthlyData).sort((a, b) => new Date(a.label) - new Date(b.label));
+            const historicalNet = sortedHistoricalData.map(d => d.net);
+
+            if (historicalNet.filter(v => v !== 0).length < 2) {
+                ctx.canvas.parentNode.innerHTML = '<p class="text-center text-gray-500 py-16">Not enough historical data to generate a forecast. At least two months of transactions are needed.</p>';
+                return;
+            }
+
+            // 2. Perform linear regression
+            const n = historicalNet.length;
+            let sumX = 0, sumY = 0, sumXY = 0, sumX2 = 0;
+            historicalNet.forEach((y, x) => {
+                sumX += x; sumY += y; sumXY += x * y; sumX2 += x * x;
+            });
+            const slope = (n * sumXY - sumX * sumY) / (n * sumX2 - sumX * sumX);
+            const intercept = (sumY - slope * sumX) / n;
+
+            // 3. Generate forecast data for the next 6 months
+            const forecastData = Array(12).fill(null); // 12 historical points
+            for (let i = 0; i < 7; i++) { // 6 future points + connecting point
+                forecastData.push(slope * (11 + i) + intercept);
+            }
+
+            // 4. Prepare labels for the next 6 months
+            const futureLabels = [];
+            for (let i = 1; i <= 6; i++) {
+                const d = new Date(today.getFullYear(), today.getMonth() + i, 1);
+                futureLabels.push(d.toLocaleString('en-US', { month: 'short', year: 'numeric' }));
+            }
+            const allLabels = [...sortedHistoricalData.map(d => d.label), ...futureLabels];
+
+            // 5. Render the chart
+            profitabilityForecastChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: allLabels,
+                    datasets: [
+                        { label: 'Historical Net Profit', data: historicalNet, borderColor: '#3b82f6', tension: 0.1, fill: false },
+                        { label: 'Forecasted Trend', data: forecastData, borderColor: '#f59e0b', borderDash: [5, 5], tension: 0.1, fill: false }
+                    ]
+                },
+                options: {
+                    responsive: true, maintainAspectRatio: false,
+                    scales: { x: { grid: { display: false } }, y: { title: { display: true, text: 'Net Profit (KSh)' } } },
+                    plugins: { legend: { position: 'top' }, tooltip: { mode: 'index', intersect: false } }
+                }
+            });
+        }
+
 
         /**
          * Renders the Finance (Inputs/Sales) view. (Updated)
@@ -1879,17 +1905,17 @@
             const container = document.getElementById('view-finance');
             
             // --- 1. FILTER DATA ---
-            const filteredTransactions = filterTransactions(transactions, financeFilters);
+            const filteredTransactions = filterTransactions(transactions, viewFilters.finance);
 
             // Set default date values if filter is custom but dates are null
             const defaultStartDate = new Date(new Date().setDate(new Date().getDate() - 30)).toISOString().substring(0, 10);
             const defaultEndDate = new Date().toISOString().substring(0, 10);
 
-            if (financeFilters.dateRange === 'custom' && !financeFilters.startDate) {
-                financeFilters.startDate = defaultStartDate;
+            if (viewFilters.finance.dateRange === 'custom' && !viewFilters.finance.startDate) {
+                viewFilters.finance.startDate = defaultStartDate;
             }
-            if (financeFilters.dateRange === 'custom' && !financeFilters.endDate) {
-                financeFilters.endDate = defaultEndDate;
+            if (viewFilters.finance.dateRange === 'custom' && !viewFilters.finance.endDate) {
+                viewFilters.finance.endDate = defaultEndDate;
             }
 
 
@@ -1956,13 +1982,13 @@
                                         <option value="custom">Custom Range</option>
                                     </select>
                                 </div>
-                                <div id="custom-date-start-container" class="${financeFilters.dateRange === 'custom' ? '' : 'hidden'}">
+                                <div id="custom-date-start-container" class="${viewFilters.finance.dateRange === 'custom' ? '' : 'hidden'}">
                                     <label for="filter-start-date" class="block text-xs font-medium text-gray-600 mb-1">Start Date</label>
-                                    <input type="date" id="filter-start-date" onchange="updateFinanceFilter('startDate', this.value)" class="input-focus w-full p-2 border border-gray-300 rounded-lg text-sm" value="${financeFilters.startDate || defaultStartDate}">
+                                    <input type="date" id="filter-start-date" onchange="updateFinanceFilter('startDate', this.value)" class="input-focus w-full p-2 border border-gray-300 rounded-lg text-sm" value="${viewFilters.finance.startDate || defaultStartDate}">
                                 </div>
-                                <div id="custom-date-end-container" class="${financeFilters.dateRange === 'custom' ? '' : 'hidden'}">
+                                <div id="custom-date-end-container" class="${viewFilters.finance.dateRange === 'custom' ? '' : 'hidden'}">
                                     <label for="filter-end-date" class="block text-xs font-medium text-gray-600 mb-1">End Date</label>
-                                    <input type="date" id="filter-end-date" onchange="updateFinanceFilter('endDate', this.value)" class="input-focus w-full p-2 border border-gray-300 rounded-lg text-sm" value="${financeFilters.endDate || defaultEndDate}">
+                                    <input type="date" id="filter-end-date" onchange="updateFinanceFilter('endDate', this.value)" class="input-focus w-full p-2 border border-gray-300 rounded-lg text-sm" value="${viewFilters.finance.endDate || defaultEndDate}">
                                 </div>
                             </div>
 
@@ -1992,8 +2018,8 @@
             updateTransactionCategories('transaction-category'); 
             
             // Set filter control values based on state
-            document.getElementById('filter-type').value = financeFilters.type;
-            document.getElementById('filter-date-range').value = financeFilters.dateRange;
+            document.getElementById('filter-type').value = viewFilters.finance.type;
+            document.getElementById('filter-date-range').value = viewFilters.finance.dateRange;
 
             // Note: Charts are now rendered in the Analytics tab
         }
@@ -2285,7 +2311,21 @@
          */
         function renderTasks(tasks) {
             const container = document.getElementById('view-tasks');
-            const sortedTasks = tasks.slice().sort((a, b) => {
+
+            let filteredTasks = [...tasks];
+            // Apply filters from viewFilters.tasks
+            if (viewFilters.tasks.isOverdue) {
+                const today = new Date();
+                today.setHours(0, 0, 0, 0);
+                filteredTasks = filteredTasks.filter(t => t.status !== 'Done' && new Date(t.dueDate) < today);
+            }
+
+            // Reset filter after applying it, so next time user visits the page it's not filtered
+            if (viewFilters.tasks.isOverdue) {
+                viewFilters.tasks.isOverdue = false;
+            }
+
+            const sortedTasks = filteredTasks.sort((a, b) => {
                 // Sort by status first (To Do > In Progress > Done), then by due date
                 const statusOrder = { 'To Do': 0, 'In Progress': 1, 'Done': 2 };
                 if (statusOrder[a.status] !== statusOrder[b.status]) {
@@ -2528,6 +2568,14 @@
                                 </div>
                             </div>
                         </div>
+
+                        <!-- Profitability Forecast -->
+                        <div class="bg-card-bg p-6 rounded-2xl shadow-lg border border-gray-200/80 mt-12">
+                            <h3 class="text-xl font-bold mb-5 pb-3 border-b text-gray-800">Profitability Forecast (Next 6 Months)</h3>
+                            <div class="h-80">
+                                <canvas id="profitability-forecast-chart"></canvas>
+                            </div>
+                        </div>
                     </section>
 
                     <!-- Livestock Analytics -->
@@ -2595,6 +2643,7 @@
                 renderPopulationGrowthChart(farmData.livestock);
                 handleProductionChartUpdate();
                 // Ensure the "no data" message is hidden and canvas is visible on initial load
+                renderProfitabilityForecastChart(farmData.transactions);
                 const trendChartCanvas = document.getElementById('production-trend-chart');
                 if (trendChartCanvas) {
                     trendChartCanvas.classList.remove('hidden');
@@ -2645,7 +2694,7 @@
                     filename = `livestock-records_${now}.pdf`;
                     break;
                 case 'transactions':
-                    const filteredTransactions = filterTransactions(farmData.transactions, financeFilters);
+                    const filteredTransactions = filterTransactions(farmData.transactions, viewFilters.finance);
                     title = 'Financial Transactions';
                     headers = ['Date', 'Type', 'Category', 'Amount (KSh)', 'Notes'];
                     data = filteredTransactions.map(i => [i.date, i.type, i.category, i.amount.toFixed(2), i.notes || '']);
