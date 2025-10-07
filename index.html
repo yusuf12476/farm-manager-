@@ -284,6 +284,14 @@
         let inactivityTimer;
         const INACTIVITY_TIMEOUT = 15 * 60 * 1000; // 15 minutes
 
+        // --- LOCAL STORAGE & DATA MANAGEMENT ---
+        let owner = null; // Will hold { userId, password }
+
+        /**
+         * Saves the entire farmData object to local storage.
+         */
+        const saveData = () => localStorage.setItem('farmData', JSON.stringify(window.farmData));
+
 
         window.farmData = {
             livestock: [],
@@ -378,25 +386,11 @@
                 return;
             }
             
-            try {
-                const response = await fetch('api/auth.php?action=register', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ userId, password: pass })
-                });
+            owner = { userId, password: pass };
+            localStorage.setItem('farmOwner', JSON.stringify(owner));
 
-                const result = await response.json();
-
-                if (response.ok) {
-                    // After successful registration, attempt to log in automatically
-                    await handleLogin(userId, pass);
-                } else {
-                    renderSecurityModal('setup', result.error || 'An unknown error occurred.');
-                }
-            } catch (error) {
-                console.error('Registration error:', error);
-                renderSecurityModal('setup', 'Could not connect to the server.');
-            }
+            // After successful registration, log in automatically
+            await handleLogin(userId, pass);
         }
 
         /**
@@ -404,13 +398,9 @@
          */
         async function handleLogout() {
             try {
-                await fetch('api/auth.php?action=logout');
-            } catch (error) {
-                console.error("Logout failed to notify server, but logging out locally.", error);
-            } finally {
-                // Always reload to clear state and trigger auth check
-                window.location.reload();
-            }
+                await fetch('auth.php?action=logout'); // This can be removed, but harmless if it fails
+            } catch (error) {}
+            window.location.reload();
         }
 
         // --- ANIMAL HUB (BREEDING & HEALTH) ---
@@ -680,7 +670,7 @@
             };
 
             farmData.health.push(record);
-            farmData.health.sort((a, b) => new Date(b.recordDate) - new Date(a.date));
+            farmData.health.sort((a, b) => new Date(b.recordDate) - new Date(a.recordDate));
             // TODO: API call to save
             renderAnimalHub('health');
 
@@ -689,12 +679,83 @@
             setTimeout(() => msgEl.textContent = '', 3000);
         }
 
-        window.handleUpdateBreedingStatus = function(id, newStatus) {
+        window.handleAddBreedingRecord = async function() {
+            const animalId = document.getElementById('breeding-animal-id').value.trim();
+            const species = document.getElementById('breeding-species').value;
+            const serviceDate = document.getElementById('breeding-service-date').value;
+            const msgEl = document.getElementById('breeding-msg');
+
+            if (!animalId || !species || !serviceDate) {
+                msgEl.textContent = 'Please fill all fields.';
+                msgEl.className = 'text-center mt-3 text-sm text-red-500 font-medium';
+                return;
+            }
+
+            const record = {
+                animalId,
+                species,
+                serviceDate,
+                status: 'In Calf/Farrow', // Default status
+                expectedDueDate: calculateDueDate(serviceDate, species)
+            };
+
+            record.id = Date.now().toString(); // Assign a local unique ID
+            farmData.breeding.push(record);
+            farmData.breeding.sort((a, b) => new Date(b.serviceDate) - new Date(a.serviceDate));
+            saveData();
+            renderAnimalHub('breeding');
+
+            msgEl.textContent = `Breeding record for ${animalId} added.`;
+            msgEl.className = 'text-center mt-3 text-sm text-green-600 font-medium';
+            setTimeout(() => msgEl.textContent = '', 3000);
+        }
+
+        window.handleAddHealthRecord = async function() {
+            const recordDate = document.getElementById('health-record-date').value;
+            const diagnosis = document.getElementById('health-diagnosis').value.trim();
+            const treatment = document.getElementById('health-treatment').value.trim();
+            const veterinarian = document.getElementById('health-vet').value.trim();
+            const msgEl = document.getElementById('health-msg');
+
+            if (!animalId || !recordDate || !diagnosis) {
+                msgEl.textContent = 'Animal ID, Date, and Diagnosis are required.';
+                msgEl.className = 'text-center mt-3 text-sm text-red-500 font-medium';
+                return;
+            }
+
+            const record = {
+                id: Date.now().toString(),
+                animalId,
+                recordDate,
+                diagnosis,
+                treatment,
+                veterinarian
+            };
+
+            farmData.health.push(record);
+            farmData.health.sort((a, b) => new Date(b.recordDate) - new Date(a.recordDate));
+            saveData();
+            renderAnimalHub('health');
+
+            msgEl.textContent = `Health record for ${animalId} added.`;
+            msgEl.className = 'text-center mt-3 text-sm text-green-600 font-medium';
+            setTimeout(() => msgEl.textContent = '', 3000);
+        }
+
+        window.handleUpdateBreedingStatus = async function(id, newStatus) {
             const record = getRecordById(id, 'breeding');
             if (record) {
-                record.status = newStatus;
-                // TODO: API call to save
-                renderAnimalHub('breeding');
+                const originalStatus = record.status;
+                try {
+                    record.status = newStatus; // Optimistic update
+                    renderAnimalHub('breeding');
+
+                    saveData(); // Save the change
+                } catch (error) {
+                    record.status = originalStatus; // Revert on failure
+                    renderAnimalHub('breeding');
+                    alert('Could not update breeding status. Please try again.');
+                }
             }
         }
 
@@ -784,7 +845,7 @@
             `;
         }
 
-        window.handleAddEquipment = function() {
+        window.handleAddEquipment = async function() {
             const name = document.getElementById('equipment-name').value.trim();
             const model = document.getElementById('equipment-model').value.trim();
             const purchaseDate = document.getElementById('equipment-purchase-date').value;
@@ -797,16 +858,15 @@
             }
 
             const record = {
-                id: Date.now().toString(),
                 name,
                 model,
-                purchaseDate,
-                maintenanceLog: [], // Initialize with an empty log
-                createdAt: new Date().toISOString()
+                purchaseDate
             };
 
+            record.id = Date.now().toString();
+            record.maintenanceLog = []; // Initialize with empty log
             farmData.equipment.push(record);
-            // TODO: API call to save
+            saveData();
             renderEquipment(farmData.equipment);
 
             msgEl.textContent = `Equipment '${name}' added.`;
@@ -816,7 +876,7 @@
             setTimeout(() => msgEl.textContent = '', 3000);
         }
 
-        window.handleAddMaintenanceRecord = function(equipmentId) {
+        window.handleAddMaintenanceRecord = async function(equipmentId) {
             const equipment = getRecordById(equipmentId, 'equipment');
             if (!equipment) return;
 
@@ -831,13 +891,14 @@
 
             const logEntry = {
                 id: Date.now().toString(),
+                equipmentId,
                 description,
                 cost: parseFloat(cost) || 0,
                 date
             };
 
             equipment.maintenanceLog.push(logEntry);
-            // TODO: API call to save
+            saveData();
             renderEquipment(farmData.equipment);
         }
 
@@ -848,64 +909,42 @@
          */
         async function initializeLocalApp() {
             const modalContainer = document.getElementById('security-modal-container');
-            
-            try {
-                const response = await fetch('api/auth.php?action=status');
-                const status = await response.json();
+            const ownerData = localStorage.getItem('farmOwner');
 
-                if (status.loggedIn) {
-                    await startApp(status.userId);
-                } else {
-                    // Not logged in, check if any user exists to decide between login/setup
-                    const setupResponse = await fetch('api/auth.php?action=register_check'); // This is a hypothetical endpoint you'd need to create
-                    const setupStatus = await setupResponse.json();
-
-                    if (setupStatus.hasOwner) {
-                        renderSecurityModal('login');
-                    } else {
-                        renderSecurityModal('setup', 'Welcome! Create the primary account for your farm.');
-                    }
-                    modalContainer.classList.remove('scale-95', 'opacity-0');
-                    modalContainer.classList.add('scale-100', 'opacity-100');
-                }
-            } catch (error) {
-                console.error("Initialization error:", error);
-                const content = document.getElementById('security-modal-content');
-                content.innerHTML = `
-                    <h3 class="text-lg md:text-xl font-bold mb-4 text-red-600">Connection Error</h3>
-                    <p class="text-gray-600">Could not connect to the server. Please ensure your XAMPP server is running and try again.</p>
-                `;
-                modalContainer.classList.remove('scale-95', 'opacity-0');
-                modalContainer.classList.add('scale-100', 'opacity-100');
+            if (ownerData) {
+                owner = JSON.parse(ownerData);
+                renderSecurityModal('login');
+            } else {
+                renderSecurityModal('setup', 'Welcome! Create the primary account for your farm.');
             }
+            modalContainer.classList.remove('scale-95', 'opacity-0');
+            modalContainer.classList.add('scale-100', 'opacity-100');
         }
 
         async function handleLogin(prefilledUserId = null, prefilledPassword = null) {
             const userId = prefilledUserId || document.getElementById('login-userid').value.trim();
             const password = prefilledPassword || document.getElementById('login-password').value;
 
-            try {
-                const response = await fetch('api/auth.php?action=login', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ userId, password })
-                });
-
-                const result = await response.json();
-
-                if (response.ok && result.success) {
-                    await startApp(result.userId);
-                } else {
-                    renderSecurityModal('login', result.error || 'Invalid credentials.');
+            // If owner isn't loaded (e.g., direct login after setup), load it.
+            if (!owner) {
+                const ownerData = localStorage.getItem('farmOwner');
+                if (ownerData) {
+                    owner = JSON.parse(ownerData);
                 }
-            } catch (error) {
-                console.error('Login error:', error);
-                renderSecurityModal('login', 'Could not connect to the server.');
+            }
+
+            if (owner && owner.userId === userId && owner.password === password) {
+                await startApp(owner.userId);
+            } else {
+                renderSecurityModal('login', 'Invalid User ID or password.');
             }
         }
 
         function handleResetApp() {            
-            alert("Password reset is not implemented in this local version. If you have forgotten your password, you would need to manually clear your browser's local storage for this page. Be aware this will delete ALL user data.");
+            if (confirm("Are you sure you want to reset the application? This will delete ALL your data and the account. This action cannot be undone.")) {
+                localStorage.clear();
+                window.location.reload();
+            }
         }
 
         /**
@@ -919,28 +958,20 @@
 
             loadFiltersFromLocalStorage(); // Load UI state for filters first
 
-            // Fetch all data from the backend
-            try {
-                const dataTypes = ['livestock', 'transactions', 'production', 'tasks', 'inventory', 'breeding', 'health', 'equipment'];
-                const promises = dataTypes.map(type => 
-                    fetch(`api/${type}.php`).then(res => res.json())
-                );
-
-                const results = await Promise.all(promises);
-                
-                results.forEach((data, index) => {
-                    const type = dataTypes[index];
-                    farmData[type] = data;
-                });
-
-            } catch (error) {
-                console.error("Failed to load farm data:", error);
-                alert("Error: Could not load your farm data from the server.");
-                return;
+            // Load data from local storage
+            const storedData = localStorage.getItem('farmData');
+            if (storedData) {
+                const parsedData = JSON.parse(storedData);
+                // Merge with defaults to ensure new properties are not missed
+                window.farmData = { ...window.farmData, ...parsedData };
+            } else {
+                // If no data, save the initial empty structure
+                saveData();
             }
 
+
             isAuthReady = true;
-            document.getElementById('auth-status').innerHTML = `User ID: <span class="font-medium text-gray-700">${currentUserId}</span> | <span class="text-green-600 font-semibold">Server Connected</span>`;
+            document.getElementById('auth-status').innerHTML = `User ID: <span class="font-medium text-gray-700">${currentUserId}</span> | <span class="text-green-600 font-semibold">Local Mode</span>`;
 
             renderAllViews();
             changeView('dashboard');
@@ -1197,7 +1228,7 @@
                     <div class="lg:col-span-3 bg-card-bg p-8 rounded-2xl shadow-lg border border-gray-200/80">
                         <h3 class="text-xl font-semibold text-gray-700 mb-5 flex items-center">
                             <svg class="w-6 h-6 mr-3 text-primary-green" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-4m0 0l-3 3m3-3l3 3m0 0V9a2 2 0 00-2-2H5a2 2 0 00-2 2v8l3-3m3-3v4m0 0l-3-3m3 3l3-3m0 0V9a2 2 0 012-2h4a2 2 0 012 2v8l-3-3m-3 3v-4"></path></svg>
-                            Livestock Overview
+                            Livestock Overview (All Time)
                         </h3>
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
                             <div class="p-5 bg-primary-green/10 rounded-lg border-l-4 border-primary-green shadow-sm">
@@ -1238,11 +1269,11 @@
                     <div class="grid grid-cols-1 md:grid-cols-3 gap-6 text-center">
                         <div class="p-5 bg-green-50 rounded-lg border-l-4 border-green-500 shadow-sm">
                             <p class="text-sm text-green-700 font-medium">Total Income</p>
-                            <p class="text-2xl font-bold text-green-600 mt-1">KSh ${totalIncome.toFixed(2).toLocaleString()}</p>
+                            <p class="text-2xl font-bold text-green-600 mt-1">KSh ${totalIncome.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</p>
                         </div>
                         <div class="p-5 bg-red-50 rounded-lg border-l-4 border-red-500 shadow-sm">
                             <p class="text-sm text-red-700 font-medium">Total Expenses</p>
-                            <p class="text-2xl font-bold text-red-600 mt-1">KSh ${totalExpense.toFixed(2).toLocaleString()}</p>
+                            <p class="text-2xl font-bold text-red-600 mt-1">KSh ${totalExpense.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</p>
                         </div>
                         <div class="p-5 ${netBg} rounded-lg border-l-4 ${netProfit >= 0 ? 'border-green-500' : 'border-red-500'} shadow-sm">
                             <p class="text-sm text-gray-700 font-medium">Net Profit/Loss</p>
@@ -2703,29 +2734,17 @@
                 return;
             }
 
-            try {
-                const response = await fetch('api/livestock.php', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(record)
-                });
-                const newRecord = await response.json();
-                if (!response.ok) throw new Error(newRecord.error || 'Failed to save.');
+            record.id = Date.now().toString(); // Assign a local unique ID
+            farmData.livestock.push(record);
+            farmData.livestock.sort((a, b) => new Date(b.date) - new Date(a.date));
+            saveData();
+            renderLivestock(farmData.livestock);
 
-                farmData.livestock.push(newRecord);
-                farmData.livestock.sort((a, b) => new Date(b.date) - new Date(a.date));
-                renderLivestock(farmData.livestock);
-
-                msgEl.textContent = `${count.toLocaleString()} ${type} added successfully!`;
-                msgEl.className = 'text-center mt-3 text-sm text-green-600 font-medium';
-                document.getElementById('add-livestock-form').reset();
-                document.getElementById('livestock-date').value = new Date().toISOString().substring(0, 10);
-                setTimeout(() => msgEl.textContent = '', 3000);
-            } catch (error) {
-                console.error("Error adding livestock:", error);
-                msgEl.textContent = `Error: ${error.message}`;
-                msgEl.className = 'text-center mt-3 text-sm text-red-500 font-medium';
-            }
+            msgEl.textContent = `${count.toLocaleString()} ${type} added successfully!`;
+            msgEl.className = 'text-center mt-3 text-sm text-green-600 font-medium';
+            document.getElementById('add-livestock-form').reset();
+            document.getElementById('livestock-date').value = new Date().toISOString().substring(0, 10);
+            setTimeout(() => msgEl.textContent = '', 3000);
         }
 
         /**
@@ -2755,36 +2774,24 @@
                 notes
             };
             
-            try {
-                const response = await fetch('api/transactions.php', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(record)
-                });
-                const newRecord = await response.json();
-                if (!response.ok) throw new Error(newRecord.error || 'Failed to save.');
+            record.id = Date.now().toString(); // Assign a local unique ID
+            farmData.transactions.push(record);
+            farmData.transactions.sort((a, b) => new Date(b.date) - new Date(a.date));
+            saveData();
+            renderTransactions(farmData.transactions);
 
-                farmData.transactions.push(newRecord);
-                farmData.transactions.sort((a, b) => new Date(b.date) - new Date(a.date));
-                renderTransactions(farmData.transactions);
-
-                msgEl.textContent = `${type.toUpperCase()} of KSh ${amount.toFixed(2).toLocaleString()} recorded successfully!`;
-                msgEl.className = 'text-center mt-3 text-sm text-green-600 font-medium';
-                document.getElementById('add-transaction-form').reset();
-                document.getElementById('transaction-date').value = new Date().toISOString().substring(0, 10);
-                updateTransactionCategories('transaction-category'); // Reset categories
-                setTimeout(() => msgEl.textContent = '', 3000);
-            } catch (error) {
-                console.error("Error adding transaction:", error);
-                msgEl.textContent = `Error: ${error.message}`;
-                msgEl.className = 'text-center mt-3 text-sm text-red-500 font-medium';
-            }
+            msgEl.textContent = `${type.toUpperCase()} of KSh ${amount.toFixed(2).toLocaleString()} recorded successfully!`;
+            msgEl.className = 'text-center mt-3 text-sm text-green-600 font-medium';
+            document.getElementById('add-transaction-form').reset();
+            document.getElementById('transaction-date').value = new Date().toISOString().substring(0, 10);
+            updateTransactionCategories('transaction-category'); // Reset categories
+            setTimeout(() => msgEl.textContent = '', 3000);
         }
         
         /**
          * Handles the submission of the Add Production form.
          */
-        window.handleAddProduction = function() {
+        window.handleAddProduction = async function() {
             const type = document.getElementById('production-type').value;
             const quantity = parseFloat(document.getElementById('production-quantity').value);
             const date = document.getElementById('production-date').value;
@@ -2798,37 +2805,31 @@
             }
 
             const record = { 
-                id: Date.now().toString(),
                 type, 
                 quantity, 
                 date, 
-                notes, 
-                createdAt: new Date().toISOString() 
+                notes
             };
             
-            try {
-                farmData.production.push(record);
-                farmData.production.sort((a, b) => new Date(b.date) - new Date(a.date));                
-                // TODO: API call to save
-                renderProduction(farmData.production); // Re-render only the affected view
+            record.id = Date.now().toString(); // Assign a local unique ID
+            farmData.production.push(record);
+            farmData.production.sort((a, b) => new Date(b.date) - new Date(a.date));
+            saveData();
+            renderProduction(farmData.production);
 
-                const unit = type.split('(')[1].replace(')', '');
-                msgEl.textContent = `${quantity.toFixed(1).toLocaleString()} ${unit} of ${type.split(' ')[0]} logged successfully!`;
-                msgEl.className = 'text-center mt-3 text-sm text-green-600 font-medium';
-                document.getElementById('add-production-form').reset();
-                document.getElementById('production-date').value = new Date().toISOString().substring(0, 10);
-                setTimeout(() => msgEl.textContent = '', 3000);
-            } catch (error) {
-                console.error("Error adding production:", error);
-                msgEl.textContent = `Error: Failed to save production record locally.`;
-                msgEl.className = 'text-center mt-3 text-sm text-red-500 font-medium';
-            }
+            const unit = type.split('(')[1].replace(')', '');
+            msgEl.textContent = `${quantity.toFixed(1).toLocaleString()} ${unit} of ${type.split(' ')[0]} logged successfully!`;
+            msgEl.className = 'text-center mt-3 text-sm text-green-600 font-medium';
+            document.getElementById('add-production-form').reset();
+            document.getElementById('production-date').value = new Date().toISOString().substring(0, 10);
+
+            setTimeout(() => msgEl.textContent = '', 3000);
         }
 
         /**
          * Handles the submission of the Add Task form.
          */
-        window.handleAddTask = function() {
+        window.handleAddTask = async function() {
             const title = document.getElementById('task-title').value.trim();
             const dueDate = document.getElementById('task-due-date').value;
             const priority = document.getElementById('task-priority').value;
@@ -2842,36 +2843,30 @@
             }
 
             const record = { 
-                id: Date.now().toString(),
                 title, 
                 dueDate, 
                 priority, 
                 notes, 
-                status: 'To Do', // Default status
-                createdAt: new Date().toISOString() 
+                status: 'To Do' // Default status
             };
             
-            try {
-                farmData.tasks.push(record);
-                // TODO: API call to save
-                renderTasks(farmData.tasks);
+            record.id = Date.now().toString(); // Assign a local unique ID
+            farmData.tasks.push(record);
+            saveData();
+            renderTasks(farmData.tasks);
 
-                msgEl.textContent = `Task added successfully!`;
-                msgEl.className = 'text-center mt-3 text-sm text-green-600 font-medium';
-                document.getElementById('add-task-form').reset();
-                document.getElementById('task-due-date').value = new Date().toISOString().substring(0, 10);
-                setTimeout(() => msgEl.textContent = '', 3000);
-            } catch (error) {
-                console.error("Error adding task:", error);
-                msgEl.textContent = `Error: Failed to save task locally.`;
-                msgEl.className = 'text-center mt-3 text-sm text-red-500 font-medium';
-            }
+            msgEl.textContent = `Task added successfully!`;
+            msgEl.className = 'text-center mt-3 text-sm text-green-600 font-medium';
+            document.getElementById('add-task-form').reset();
+            document.getElementById('task-due-date').value = new Date().toISOString().substring(0, 10);
+
+            setTimeout(() => msgEl.textContent = '', 3000);
         }
 
         /**
          * Handles the submission of the Add Inventory form.
          */
-        window.handleAddInventory = function() {
+        window.handleAddInventory = async function() {
             const name = document.getElementById('inventory-name').value.trim();
             const category = document.getElementById('inventory-category').value;
             const quantity = parseFloat(document.getElementById('inventory-quantity').value);
@@ -2888,32 +2883,26 @@
             }
 
             const record = { 
-                id: Date.now().toString(),
                 name, 
                 category, 
                 quantity, 
                 unit, 
                 date, 
                 lowStockThreshold: threshold ? parseFloat(threshold) : null,
-                notes, 
-                createdAt: new Date().toISOString() 
+                notes
             };
             
-            try {
-                farmData.inventory.push(record);
-                // TODO: API call to save
-                renderInventory(farmData.inventory);
+            record.id = Date.now().toString(); // Assign a local unique ID
+            farmData.inventory.push(record);
+            saveData();
+            renderInventory(farmData.inventory);
 
-                msgEl.textContent = `Item '${name}' added successfully!`;
-                msgEl.className = 'text-center mt-3 text-sm text-green-600 font-medium';
-                document.getElementById('add-inventory-form').reset();
-                document.getElementById('inventory-date').value = new Date().toISOString().substring(0, 10);
-                setTimeout(() => msgEl.textContent = '', 3000);
-            } catch (error) {
-                console.error("Error adding inventory item:", error);
-                msgEl.textContent = `Error: Failed to save item locally.`;
-                msgEl.className = 'text-center mt-3 text-sm text-red-500 font-medium';
-            }
+            msgEl.textContent = `Item '${name}' added successfully!`;
+            msgEl.className = 'text-center mt-3 text-sm text-green-600 font-medium';
+            document.getElementById('add-inventory-form').reset();
+            document.getElementById('inventory-date').value = new Date().toISOString().substring(0, 10);
+
+            setTimeout(() => msgEl.textContent = '', 3000);
         }
 
         /**
@@ -2924,8 +2913,7 @@
             const newDelegatePass = document.getElementById('new-delegate-password').value;
             // This functionality is more complex with a database.
             // It would require an API endpoint to create a new user with `is_owner=0`
-            // and `owner_id` set to the current user's ID.
-            alert("Delegate management needs to be implemented on the server.");
+            alert("Delegate management is not supported in local storage mode.");
         }
 
         /**
@@ -2935,8 +2923,7 @@
             if (!confirm(`Are you sure you want to remove access for user '${delegateId}'?`)) {
                 return;
             }
-            // Requires an API endpoint to delete the delegate user from the database.
-            alert("Delegate management needs to be implemented on the server.");
+            alert("Delegate management is not supported in local storage mode.");
         }
 
         /**
@@ -3036,13 +3023,26 @@
             const confirmNewPass = document.getElementById('confirm-new-password').value;
             const msgEl = document.getElementById('password-msg');
 
-            // This now requires an API call.
-            // The backend would verify the current password against the hash in the DB,
-            // then update the hash with the new password if valid.
-            alert("Password change needs to be implemented on the server.");
+            if (currentPass !== owner.password) {
+                msgEl.textContent = 'Current password is incorrect.';
+                msgEl.className = 'text-center mt-4 text-sm font-medium text-red-500';
+                return;
+            }
+            if (newPass.length < 6) {
+                msgEl.textContent = 'New password must be at least 6 characters long.';
+                msgEl.className = 'text-center mt-4 text-sm font-medium text-red-500';
+                return;
+            }
+            if (newPass !== confirmNewPass) {
+                msgEl.textContent = 'New passwords do not match.';
+                msgEl.className = 'text-center mt-4 text-sm font-medium text-red-500';
+                return;
+            }
 
+            owner.password = newPass;
+            localStorage.setItem('farmOwner', JSON.stringify(owner));
 
-            msgEl.textContent = 'Password updated successfully!';
+            msgEl.textContent = 'Password updated successfully! It will be used the next time you log in.';
             msgEl.className = 'text-center mt-4 text-sm font-medium text-green-600';
             document.getElementById('change-password-form').reset();
         }
@@ -3079,28 +3079,17 @@
          */
         async function handleDelete(id, collectionName) {
             window.closeModal('delete');
-            try {
-                const response = await fetch(`api/${collectionName}.php?id=${id}`, {
-                    method: 'DELETE'
-                });
-                const result = await response.json();
-                if (!response.ok || !result.success) {
-                    throw new Error(result.error || 'Failed to delete on server.');
-                }
-
-                farmData[collectionName] = farmData[collectionName].filter(item => item.id !== id);
-                
-                
-                // Special handling for animal hub sub-views
-                if (collectionName === 'breeding' || collectionName === 'health') {
-                    renderAnimalHub(collectionName);
-                } else if (collectionName !== 'equipment') { // Equipment re-renders its own view
-                    window.changeView(collectionName); // Re-render the current view
-                }
-
-            } catch (error) {
-                console.error(`Error deleting record ${id}:`, error);
-                alert(`Error: Could not delete record. ${error.message}`);
+            
+            farmData[collectionName] = farmData[collectionName].filter(item => item.id !== id);
+            saveData();
+            
+            // Special handling for animal hub sub-views
+            if (collectionName === 'breeding' || collectionName === 'health') {
+                renderAnimalHub(collectionName);
+            } else if (collectionName !== 'equipment') { // Equipment re-renders its own view
+                window.changeView(collectionName); // Re-render the current view to show deletion
+            } else {
+                renderEquipment(farmData.equipment);
             }
         }
 
@@ -3307,7 +3296,7 @@
         /**
          * Handles the form submission within the edit modal to update the record.
          */
-        window.handleUpdateRecord = function() {
+        window.handleUpdateRecord = async function() {
             const { id, collectionName } = currentEditingRecord;
             const record = getRecordById(id, collectionName);
             if (!record) return;
@@ -3316,143 +3305,111 @@
             msgEl.classList.remove('hidden', 'text-green-600', 'text-red-500');
 
             try {
-                let updated = false;
+                let updatedRecord = { id };
+                let isValid = false;
                 // Update logic based on collection type
                 switch (collectionName) {
                     case 'livestock':
-                        const lType = document.getElementById('edit-livestock-type').value;
-                        const lCount = parseInt(document.getElementById('edit-livestock-count').value);
-                        const lDate = document.getElementById('edit-livestock-date').value;
-                        const lNotes = document.getElementById('edit-livestock-notes').value.trim();
+                        updatedRecord.type = document.getElementById('edit-livestock-type').value;
+                        updatedRecord.count = parseInt(document.getElementById('edit-livestock-count').value);
+                        updatedRecord.date = document.getElementById('edit-livestock-date').value;
+                        updatedRecord.notes = document.getElementById('edit-livestock-notes').value.trim();
 
-                        if (lType && !isNaN(lCount) && lCount > 0 && lDate) {
-                            record.type = lType;
-                            record.count = lCount;
-                            record.date = lDate;
-                            record.notes = lNotes;
-                            updated = true;
+                        if (updatedRecord.type && !isNaN(updatedRecord.count) && updatedRecord.count > 0 && updatedRecord.date) {
+                            isValid = true;
                         }
                         break;
 
                     case 'transactions':
-                        const tType = document.getElementById('edit-transaction-type').value;
-                        const tCategory = document.getElementById('edit-transaction-category').value;
-                        const tAmount = parseFloat(document.getElementById('edit-transaction-amount').value);
-                        const tDate = document.getElementById('edit-transaction-date').value;
-                        const tNotes = document.getElementById('edit-transaction-notes').value.trim();
+                        updatedRecord.type = document.getElementById('edit-transaction-type').value;
+                        updatedRecord.category = document.getElementById('edit-transaction-category').value;
+                        updatedRecord.amount = parseFloat(document.getElementById('edit-transaction-amount').value);
+                        updatedRecord.date = document.getElementById('edit-transaction-date').value;
+                        updatedRecord.notes = document.getElementById('edit-transaction-notes').value.trim();
 
-                        if (tType && tCategory && !isNaN(tAmount) && tAmount > 0 && tDate) {
-                            record.type = tType;
-                            record.category = tCategory;
-                            record.amount = tAmount;
-                            record.date = tDate;
-                            record.notes = tNotes;
-                            updated = true;
+                        if (updatedRecord.type && updatedRecord.category && !isNaN(updatedRecord.amount) && updatedRecord.amount > 0 && updatedRecord.date) {
+                            isValid = true;
                         }
                         break;
                     
                     case 'production':
-                        const pType = document.getElementById('edit-production-type').value;
-                        const pQuantity = parseFloat(document.getElementById('edit-production-quantity').value);
-                        const pDate = document.getElementById('edit-production-date').value;
-                        const pNotes = document.getElementById('edit-production-notes').value.trim();
+                        updatedRecord.type = document.getElementById('edit-production-type').value;
+                        updatedRecord.quantity = parseFloat(document.getElementById('edit-production-quantity').value);
+                        updatedRecord.date = document.getElementById('edit-production-date').value;
+                        updatedRecord.notes = document.getElementById('edit-production-notes').value.trim();
 
-                        if (pType && !isNaN(pQuantity) && pQuantity > 0 && pDate) {
-                            record.type = pType;
-                            record.quantity = pQuantity;
-                            record.date = pDate;
-                            record.notes = pNotes;
-                            updated = true;
+                        if (updatedRecord.type && !isNaN(updatedRecord.quantity) && updatedRecord.quantity > 0 && updatedRecord.date) {
+                            isValid = true;
                         }
                         break;
                     
                     case 'tasks':
-                        const taskTitle = document.getElementById('edit-task-title').value.trim();
-                        const taskDueDate = document.getElementById('edit-task-due-date').value;
-                        const taskPriority = document.getElementById('edit-task-priority').value;
-                        const taskStatus = document.getElementById('edit-task-status').value;
-                        const taskNotes = document.getElementById('edit-task-notes').value.trim();
+                        updatedRecord.title = document.getElementById('edit-task-title').value.trim();
+                        updatedRecord.dueDate = document.getElementById('edit-task-due-date').value;
+                        updatedRecord.priority = document.getElementById('edit-task-priority').value;
+                        updatedRecord.status = document.getElementById('edit-task-status').value;
+                        updatedRecord.notes = document.getElementById('edit-task-notes').value.trim();
 
-                        if (taskTitle && taskDueDate && taskPriority && taskStatus) {
-                            record.title = taskTitle;
-                            record.dueDate = taskDueDate;
-                            record.priority = taskPriority;
-                            record.status = taskStatus;
-                            record.notes = taskNotes;
-                            updated = true;
+                        if (updatedRecord.title && updatedRecord.dueDate && updatedRecord.priority && updatedRecord.status) {
+                            isValid = true;
                         }
                         break;
                     
                     case 'inventory':
-                        const invName = document.getElementById('edit-inventory-name').value.trim();
-                        const invCategory = document.getElementById('edit-inventory-category').value;
-                        const invQuantity = parseFloat(document.getElementById('edit-inventory-quantity').value);
-                        const invUnit = document.getElementById('edit-inventory-unit').value.trim();
-                        const invDate = document.getElementById('edit-inventory-date').value;
-                        const invThreshold = document.getElementById('edit-inventory-threshold').value;
-                        const invNotes = document.getElementById('edit-inventory-notes').value.trim();
+                        updatedRecord.name = document.getElementById('edit-inventory-name').value.trim();
+                        updatedRecord.category = document.getElementById('edit-inventory-category').value;
+                        updatedRecord.quantity = parseFloat(document.getElementById('edit-inventory-quantity').value);
+                        updatedRecord.unit = document.getElementById('edit-inventory-unit').value.trim();
+                        updatedRecord.date = document.getElementById('edit-inventory-date').value;
+                        updatedRecord.lowStockThreshold = document.getElementById('edit-inventory-threshold').value;
+                        updatedRecord.notes = document.getElementById('edit-inventory-notes').value.trim();
 
-                        if (invName && invCategory && !isNaN(invQuantity) && invQuantity >= 0 && invUnit && invDate) {
-                            record.name = invName;
-                            record.category = invCategory;
-                            record.quantity = invQuantity;
-                            record.lowStockThreshold = invThreshold ? parseFloat(invThreshold) : null;
-                            record.unit = invUnit;
-                            record.date = invDate;
-                            record.notes = invNotes;
-                            updated = true;
+                        if (updatedRecord.name && updatedRecord.category && !isNaN(updatedRecord.quantity) && updatedRecord.quantity >= 0 && updatedRecord.unit && updatedRecord.date) {
+                            updatedRecord.lowStockThreshold = updatedRecord.lowStockThreshold ? parseFloat(updatedRecord.lowStockThreshold) : null;
+                            isValid = true;
                         }
                         break;
                     
                     case 'breeding':
-                        const bAnimalId = document.getElementById('edit-breeding-animal-id').value.trim();
-                        const bSpecies = document.getElementById('edit-breeding-species').value;
-                        const bServiceDate = document.getElementById('edit-breeding-service-date').value;
-                        const bStatus = document.getElementById('edit-breeding-status').value;
+                        updatedRecord.animalId = document.getElementById('edit-breeding-animal-id').value.trim();
+                        updatedRecord.species = document.getElementById('edit-breeding-species').value;
+                        updatedRecord.serviceDate = document.getElementById('edit-breeding-service-date').value;
+                        updatedRecord.status = document.getElementById('edit-breeding-status').value;
 
-                        if (bAnimalId && bSpecies && bServiceDate && bStatus) {
-                            record.animalId = bAnimalId;
-                            record.species = bSpecies;
-                            record.serviceDate = bServiceDate;
-                            record.status = bStatus;
-                            record.expectedDueDate = calculateDueDate(bServiceDate, bSpecies);
-                            updated = true;
+                        if (updatedRecord.animalId && updatedRecord.species && updatedRecord.serviceDate && updatedRecord.status) {
+                            updatedRecord.expectedDueDate = calculateDueDate(updatedRecord.serviceDate, updatedRecord.species);
+                            isValid = true;
                         }
                         break;
 
                     case 'health':
-                        const hAnimalId = document.getElementById('edit-health-animal-id').value.trim();
-                        const hRecordDate = document.getElementById('edit-health-record-date').value;
-                        const hDiagnosis = document.getElementById('edit-health-diagnosis').value.trim();
-                        const hTreatment = document.getElementById('edit-health-treatment').value.trim();
-                        const hVet = document.getElementById('edit-health-veterinarian').value.trim();
+                        updatedRecord.animalId = document.getElementById('edit-health-animal-id').value.trim();
+                        updatedRecord.recordDate = document.getElementById('edit-health-record-date').value;
+                        updatedRecord.diagnosis = document.getElementById('edit-health-diagnosis').value.trim();
+                        updatedRecord.treatment = document.getElementById('edit-health-treatment').value.trim();
+                        updatedRecord.veterinarian = document.getElementById('edit-health-veterinarian').value.trim();
 
-                        if (hAnimalId && hRecordDate && hDiagnosis) {
-                            record.animalId = hAnimalId;
-                            record.recordDate = hRecordDate;
-                            record.diagnosis = hDiagnosis;
-                            record.treatment = hTreatment;
-                            record.veterinarian = hVet;
-                            updated = true;
+                        if (updatedRecord.animalId && updatedRecord.recordDate && updatedRecord.diagnosis) {
+                            isValid = true;
                         }
                         break;
 
                     case 'equipment':
-                        const eName = document.getElementById('edit-equipment-name').value.trim();
-                        const eModel = document.getElementById('edit-equipment-model').value.trim();
-                        const ePurchaseDate = document.getElementById('edit-equipment-purchase-date').value;
+                        updatedRecord.name = document.getElementById('edit-equipment-name').value.trim();
+                        updatedRecord.model = document.getElementById('edit-equipment-model').value.trim();
+                        updatedRecord.purchaseDate = document.getElementById('edit-equipment-purchase-date').value;
 
-                        if (eName && ePurchaseDate) {
-                            record.name = eName;
-                            record.model = eModel;
-                            record.purchaseDate = ePurchaseDate;
-                            updated = true;
+                        if (updatedRecord.name && updatedRecord.purchaseDate) {
+                            isValid = true;
                         }
                         break;
                 }
 
-                if (updated) {
-                    // TODO: API call to save the updated record
+                if (isValid) {
+                    // Update local data
+                    Object.assign(record, updatedRecord);
+                    saveData();
+
                     if (collectionName === 'equipment') {
                         renderEquipment(farmData.equipment);
                     } else if (collectionName === 'breeding' || collectionName === 'health') {
@@ -3469,8 +3426,7 @@
                 }
 
             } catch (error) {
-                console.error("Error updating record:", error);
-                msgEl.textContent = `Error: Failed to update record locally.`;
+                msgEl.textContent = `Error: ${error.message}`;
                 msgEl.className = 'text-center mt-4 text-sm text-red-500 font-medium';
             }
         }
@@ -3478,12 +3434,20 @@
         /**
          * Handles inline status updates for tasks.
          */
-        window.handleUpdateTaskStatus = function(id, newStatus) {
+        window.handleUpdateTaskStatus = async function(id, newStatus) {
             const record = getRecordById(id, 'tasks');
             if (record) {
-                record.status = newStatus;
-                // TODO: API call to save
-                renderTasks(farmData.tasks); // Re-render the task list
+                const originalStatus = record.status;
+                try {
+                    record.status = newStatus; // Optimistic update
+                    renderTasks(farmData.tasks);
+
+                    saveData();
+                } catch (error) {
+                    record.status = originalStatus; // Revert on failure
+                    renderTasks(farmData.tasks);
+                    alert('Could not update task status. Please try again.');
+                }
             }
         }
 
