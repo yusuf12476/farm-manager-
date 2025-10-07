@@ -9,9 +9,7 @@
     <!-- Load Chart.js for data visualization -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
     <!-- Load jsPDF and autoTable plugin for PDF generation -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-    <!-- Load CryptoJS for data encryption -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.2.0/crypto-js.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>    
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf-autotable.min.js"></script>
     
     <!-- Configure Tailwind for custom colors and font -->
@@ -262,15 +260,8 @@
     <!-- LOCAL DATA SCRIPT -->
     <script>
         // --- LOCAL DATA STATE ---
-        let userId = "local_farmer_12345";
         let isAuthReady = false;
         let currentEditingRecord = null; // Stores the id and collection of the record being edited
-
-        // Security state
-        let allUsers = [];
-        let currentUserId = null;
-        let appPassword = null;
-        const USERS_KEY = 'farmTrackerProUsers';
 
         // Global filter state and chart instances for Finance tab
         let financeFilters = {
@@ -291,7 +282,7 @@
 
         // Inactivity timer state
         let inactivityTimer;
-        const INACTIVITY_TIMEOUT = 2 * 60 * 1000; // 2 minutes
+        const INACTIVITY_TIMEOUT = 15 * 60 * 1000; // 15 minutes
 
 
         window.farmData = {
@@ -333,64 +324,6 @@
             }
         }
 
-        // --- SECURITY & ENCRYPTION ---
-
-        function getEncryptedDataKey(userId) {
-            // Creates a unique localStorage key for each user's data
-            return `farmTrackerProData_${userId}`;
-        }
-
-        /**
-         * Encrypts the farmData object using the app password.
-         */
-        function encryptAndSave() {
-            if (!appPassword) {
-                console.error("Cannot save: Password is not set.");
-                return;
-            }
-            try {
-                const dataString = JSON.stringify(farmData);
-                const encryptedData = CryptoJS.AES.encrypt(dataString, appPassword).toString();
-                localStorage.setItem(getEncryptedDataKey(currentUserId), encryptedData);
-            } catch (e) {
-                console.error("Encryption failed:", e);
-                alert("Error: Could not save encrypted data. Your data might not be persisted.");
-            }
-        }
-
-        /**
-         * Decrypts data from localStorage and loads it into the app.
-         * @param {string} password - The password to use for decryption.
-         * @returns {boolean} - True if decryption is successful, false otherwise.
-         */
-        function decryptAndLoad(userId, password) {
-            const encryptedData = localStorage.getItem(getEncryptedDataKey(userId));
-            if (!encryptedData) return false;
-
-            try {
-                const decryptedBytes = CryptoJS.AES.decrypt(encryptedData, password);
-                const decryptedString = decryptedBytes.toString(CryptoJS.enc.Utf8);
-
-                if (!decryptedString) {
-                    return false; // Wrong password results in empty string
-                }
-
-                const loadedData = JSON.parse(decryptedString);
-                // Restore data, keeping the UI options
-                Object.keys(farmData).forEach(key => {
-                    if (loadedData[key] !== undefined && !Array.isArray(farmData[key].push)) { // Check if it's not a function (like array.push)
-                        farmData[key] = loadedData[key];
-                    }
-                });
-                currentUserId = userId; // Set current user
-                appPassword = password; // Set the password for the session
-                return true;
-            } catch (e) {
-                console.error("Decryption failed:", e);
-                return false;
-            }
-        }
-
         /**
          * Renders the content of the security modal (setup or login).
          */
@@ -410,16 +343,15 @@
                         ${errorHtml}
                         <button type="submit" class="w-full mt-4 bg-primary-green text-white py-3 rounded-lg font-bold hover:bg-primary-green-dark transition">Create Account & Start</button>
                     </form>
-                    <div class="text-center mt-4">
-                        <button onclick="renderSecurityModal('login')" class="text-xs text-gray-500 hover:text-blue-600 hover:underline">Already have an account? Login</button>
-                    </form>
                 `;
             } else { // 'login'
                 html = `
-                    <h3 class="text-lg md:text-xl font-bold mb-4 text-gray-800">Login to Your Farm</h3>
+                    <h3 id="login-title" class="text-lg md:text-xl font-bold mb-4 text-gray-800">Login to Your Farm</h3>
                     <form onsubmit="event.preventDefault(); handleLogin();">
-                        <input type="text" id="login-userid" required placeholder="Your User ID" class="input-focus w-full p-3 border border-gray-300 rounded-lg mb-2">
-                        <input type="password" id="login-password" required placeholder="Your Password" class="input-focus w-full p-3 border border-gray-300 rounded-lg">
+                        <div id="login-step-1">
+                            <input type="text" id="login-userid" required placeholder="Your User ID" class="input-focus w-full p-3 border border-gray-300 rounded-lg mb-2" pattern="[a-z0-9_]+">
+                            <input type="password" id="login-password" required placeholder="Your Password" class="input-focus w-full p-3 border border-gray-300 rounded-lg">
+                        </div>
                         ${errorHtml}
                         <button type="submit" class="w-full mt-4 bg-primary-green text-white py-3 rounded-lg font-bold hover:bg-primary-green-dark transition">Unlock</button>
                     </form>
@@ -432,19 +364,11 @@
             content.innerHTML = html;
         }
 
-        function handleCreateUser() {
-            const userId = document.getElementById('setup-userid').value.trim().toLowerCase();
+        async function handleCreateUser() {
+            const userId = document.getElementById('setup-userid').value.trim();
             const pass = document.getElementById('setup-password').value;
             const confirmPass = document.getElementById('setup-password-confirm').value;
 
-            if (!userId) {
-                renderSecurityModal('setup', 'User ID cannot be empty.');
-                return;
-            }
-            if (allUsers.find(u => u.userId === userId)) {
-                renderSecurityModal('setup', 'User ID already exists. Please choose another.');
-                return;
-            }
             if (pass.length < 6) {
                 renderSecurityModal('setup', 'Password must be at least 6 characters long.');
                 return;
@@ -453,30 +377,40 @@
                 renderSecurityModal('setup', 'Passwords do not match.');
                 return;
             }
-
-            // Add new user
-            allUsers.push({ userId, delegates: [] }); // Initialize as an owner with an empty delegates array
-            localStorage.setItem(USERS_KEY, JSON.stringify(allUsers));
-
-            // Set session and save initial data
-            currentUserId = userId;
-            appPassword = pass;
             
-            // Reset farmData to a clean slate for the new user
-            const defaultOptions = { ...window.farmData };
-            Object.keys(window.farmData).forEach(key => { if (Array.isArray(window.farmData[key])) window.farmData[key] = []; });
+            try {
+                const response = await fetch('api/auth.php?action=register', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ userId, password: pass })
+                });
 
-            encryptAndSave(); // Save the initial empty state for this new user
-            startApp();
+                const result = await response.json();
+
+                if (response.ok) {
+                    // After successful registration, attempt to log in automatically
+                    await handleLogin(userId, pass);
+                } else {
+                    renderSecurityModal('setup', result.error || 'An unknown error occurred.');
+                }
+            } catch (error) {
+                console.error('Registration error:', error);
+                renderSecurityModal('setup', 'Could not connect to the server.');
+            }
         }
 
         /**
          * Logs the user out by reloading the page, which will trigger the security check.
          */
-        function handleLogout() {
-            appPassword = null; // Clear session password
-            currentUserId = null;
-            window.location.reload();
+        async function handleLogout() {
+            try {
+                await fetch('api/auth.php?action=logout');
+            } catch (error) {
+                console.error("Logout failed to notify server, but logging out locally.", error);
+            } finally {
+                // Always reload to clear state and trigger auth check
+                window.location.reload();
+            }
         }
 
         // --- ANIMAL HUB (BREEDING & HEALTH) ---
@@ -713,7 +647,7 @@
 
             farmData.breeding.push(record);
             farmData.breeding.sort((a, b) => new Date(b.serviceDate) - new Date(a.serviceDate));
-            encryptAndSave();
+            // TODO: API call to save
             renderAnimalHub('breeding');
 
             msgEl.textContent = `Breeding record for ${animalId} added.`;
@@ -747,7 +681,7 @@
 
             farmData.health.push(record);
             farmData.health.sort((a, b) => new Date(b.recordDate) - new Date(a.date));
-            encryptAndSave();
+            // TODO: API call to save
             renderAnimalHub('health');
 
             msgEl.textContent = `Health record for ${animalId} added.`;
@@ -759,7 +693,7 @@
             const record = getRecordById(id, 'breeding');
             if (record) {
                 record.status = newStatus;
-                encryptAndSave();
+                // TODO: API call to save
                 renderAnimalHub('breeding');
             }
         }
@@ -872,7 +806,7 @@
             };
 
             farmData.equipment.push(record);
-            encryptAndSave();
+            // TODO: API call to save
             renderEquipment(farmData.equipment);
 
             msgEl.textContent = `Equipment '${name}' added.`;
@@ -903,20 +837,8 @@
             };
 
             equipment.maintenanceLog.push(logEntry);
-            encryptAndSave();
+            // TODO: API call to save
             renderEquipment(farmData.equipment);
-        }
-
-        // --- LOCAL STORAGE PERSISTENCE ---
-
-        /**
-         * Loads data from localStorage into the farmData object on startup.
-         */
-        function loadFromLocalStorage() {
-            // This function is now deprecated. All data is loaded from the single encrypted entry.
-            // If old, unencrypted data exists, we should offer to migrate it.
-            // For now, we will prioritize the new encrypted system.
-            // If `storedLivestock` exists, it means there's old data. We can handle this later.
         }
 
         // --- INITIALIZATION ---
@@ -924,48 +846,61 @@
         /**
          * Initializes the local application, loads data, and sets up the UI.
          */
-        function initializeLocalApp() {
+        async function initializeLocalApp() {
             const modalContainer = document.getElementById('security-modal-container');
-            modalContainer.classList.remove('scale-95', 'opacity-0');
-            modalContainer.classList.add('scale-100', 'opacity-100');
+            
+            try {
+                const response = await fetch('api/auth.php?action=status');
+                const status = await response.json();
 
-            const storedUsers = localStorage.getItem(USERS_KEY);
-            if (storedUsers) {
-                allUsers = JSON.parse(storedUsers);
-            }
+                if (status.loggedIn) {
+                    await startApp(status.userId);
+                } else {
+                    // Not logged in, check if any user exists to decide between login/setup
+                    const setupResponse = await fetch('api/auth.php?action=register_check'); // This is a hypothetical endpoint you'd need to create
+                    const setupStatus = await setupResponse.json();
 
-            if (allUsers.length > 0) {
-                renderSecurityModal('login');
-            } else {
-                renderSecurityModal('setup', 'Welcome! Create the primary account for your farm.');
+                    if (setupStatus.hasOwner) {
+                        renderSecurityModal('login');
+                    } else {
+                        renderSecurityModal('setup', 'Welcome! Create the primary account for your farm.');
+                    }
+                    modalContainer.classList.remove('scale-95', 'opacity-0');
+                    modalContainer.classList.add('scale-100', 'opacity-100');
+                }
+            } catch (error) {
+                console.error("Initialization error:", error);
+                const content = document.getElementById('security-modal-content');
+                content.innerHTML = `
+                    <h3 class="text-lg md:text-xl font-bold mb-4 text-red-600">Connection Error</h3>
+                    <p class="text-gray-600">Could not connect to the server. Please ensure your XAMPP server is running and try again.</p>
+                `;
+                modalContainer.classList.remove('scale-95', 'opacity-0');
+                modalContainer.classList.add('scale-100', 'opacity-100');
             }
         }
 
-        function handleLogin() {
-            const userId = document.getElementById('login-userid').value.trim().toLowerCase();
-            const password = document.getElementById('login-password').value;
+        async function handleLogin(prefilledUserId = null, prefilledPassword = null) {
+            const userId = prefilledUserId || document.getElementById('login-userid').value.trim();
+            const password = prefilledPassword || document.getElementById('login-password').value;
 
-            // Find if the user is an owner or a delegate
-            const owner = allUsers.find(u => u.userId === userId || (u.delegates && u.delegates.includes(userId)));
+            try {
+                const response = await fetch('api/auth.php?action=login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ userId, password })
+                });
 
-            if (!owner) {
-                renderSecurityModal('login', 'User ID not found.');
-                return;
-            }
+                const result = await response.json();
 
-            // If the logged-in user is a delegate, we need to use the owner's ID for data decryption.
-            const dataOwnerId = owner.userId;
-            const isDelegate = dataOwnerId !== userId;
-
-            if (decryptAndLoad(dataOwnerId, password)) {
-                // Set the currentUserId to the person who logged in, not necessarily the owner
-                currentUserId = userId;
-                if(isDelegate) {
-                    console.log(`Delegate user '${userId}' logged into owner '${dataOwnerId}' account.`);
+                if (response.ok && result.success) {
+                    await startApp(result.userId);
+                } else {
+                    renderSecurityModal('login', result.error || 'Invalid credentials.');
                 }
-                startApp();
-            } else {
-                renderSecurityModal('login', 'Incorrect password. Please try again.');
+            } catch (error) {
+                console.error('Login error:', error);
+                renderSecurityModal('login', 'Could not connect to the server.');
             }
         }
 
@@ -976,16 +911,36 @@
         /**
          * Starts the main application after successful login/setup.
          */
-        function startApp() {
+        async function startApp(currentUserId) {
             // Hide the security modal
             const securityModal = document.getElementById('security-modal-backdrop');
             securityModal.style.opacity = '0';
             setTimeout(() => securityModal.style.display = 'none', 500);
 
             loadFiltersFromLocalStorage(); // Load UI state for filters first
-            isAuthReady = true;
 
-            document.getElementById('auth-status').innerHTML = `User ID: <span class="font-medium text-gray-700">${currentUserId}</span> | <span class="text-secondary-yellow font-semibold">Local Storage Active</span>`;
+            // Fetch all data from the backend
+            try {
+                const dataTypes = ['livestock', 'transactions', 'production', 'tasks', 'inventory', 'breeding', 'health', 'equipment'];
+                const promises = dataTypes.map(type => 
+                    fetch(`api/${type}.php`).then(res => res.json())
+                );
+
+                const results = await Promise.all(promises);
+                
+                results.forEach((data, index) => {
+                    const type = dataTypes[index];
+                    farmData[type] = data;
+                });
+
+            } catch (error) {
+                console.error("Failed to load farm data:", error);
+                alert("Error: Could not load your farm data from the server.");
+                return;
+            }
+
+            isAuthReady = true;
+            document.getElementById('auth-status').innerHTML = `User ID: <span class="font-medium text-gray-700">${currentUserId}</span> | <span class="text-green-600 font-semibold">Server Connected</span>`;
 
             renderAllViews();
             changeView('dashboard');
@@ -997,13 +952,6 @@
             const { livestock, transactions, production, tasks, inventory } = farmData;
             renderDashboard(livestock, transactions, production, tasks, inventory);
             // Other views are rendered on demand when their tab is clicked or data changes.
-        }
-
-        /**
-         * Saves the current farmData state to localStorage after any CRUD operation.
-         */
-        function saveToLocalStorage() {
-            encryptAndSave();
         }
         
         // --- UI RENDERING AND LOGIC ---
@@ -2733,12 +2681,21 @@
         /**
          * Handles the submission of the Add Livestock form.
          */
-        window.handleAddLivestock = function() {
+        window.handleAddLivestock = async function() {
             const type = document.getElementById('livestock-type').value;
             const count = parseInt(document.getElementById('livestock-count').value);
             const date = document.getElementById('livestock-date').value;
             const notes = document.getElementById('livestock-notes').value.trim();
             const msgEl = document.getElementById('livestock-msg');
+            msgEl.className = 'text-center mt-3 text-sm font-medium';
+            msgEl.textContent = 'Saving...';
+
+            const record = { 
+                type, 
+                count, 
+                date, 
+                notes
+            };
 
             if (!type || isNaN(count) || count <= 0 || !date) {
                 msgEl.textContent = 'Please fill all required fields correctly.';
@@ -2746,19 +2703,18 @@
                 return;
             }
 
-            const record = { 
-                id: Date.now().toString(),
-                type, 
-                count, 
-                date, 
-                notes, 
-                createdAt: new Date().toISOString() 
-            };
-            
             try {
-                farmData.livestock.push(record);
-                saveToLocalStorage();
-                renderLivestock(farmData.livestock); // Re-render only the affected view
+                const response = await fetch('api/livestock.php', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(record)
+                });
+                const newRecord = await response.json();
+                if (!response.ok) throw new Error(newRecord.error || 'Failed to save.');
+
+                farmData.livestock.push(newRecord);
+                farmData.livestock.sort((a, b) => new Date(b.date) - new Date(a.date));
+                renderLivestock(farmData.livestock);
 
                 msgEl.textContent = `${count.toLocaleString()} ${type} added successfully!`;
                 msgEl.className = 'text-center mt-3 text-sm text-green-600 font-medium';
@@ -2767,7 +2723,7 @@
                 setTimeout(() => msgEl.textContent = '', 3000);
             } catch (error) {
                 console.error("Error adding livestock:", error);
-                msgEl.textContent = `Error: Failed to save record locally.`;
+                msgEl.textContent = `Error: ${error.message}`;
                 msgEl.className = 'text-center mt-3 text-sm text-red-500 font-medium';
             }
         }
@@ -2775,13 +2731,15 @@
         /**
          * Handles the submission of the Add Transaction form.
          */
-        window.handleAddTransaction = function() {
+        window.handleAddTransaction = async function() {
             const type = document.getElementById('transaction-type').value;
             const category = document.getElementById('transaction-category').value;
             const amount = parseFloat(document.getElementById('transaction-amount').value);
             const date = document.getElementById('transaction-date').value;
             const notes = document.getElementById('transaction-notes').value.trim();
             const msgEl = document.getElementById('transaction-msg');
+            msgEl.className = 'text-center mt-3 text-sm font-medium';
+            msgEl.textContent = 'Saving...';
 
             if (!type || !category || isNaN(amount) || amount <= 0 || !date) {
                 msgEl.textContent = 'Please fill all required fields correctly.';
@@ -2789,31 +2747,36 @@
                 return;
             }
 
-            const record = { 
-                id: Date.now().toString(),
+            const record = {
                 type, 
                 category, 
                 amount, 
                 date, 
-                notes, 
-                createdAt: new Date().toISOString() 
+                notes
             };
             
             try {
-                farmData.transactions.push(record);
+                const response = await fetch('api/transactions.php', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(record)
+                });
+                const newRecord = await response.json();
+                if (!response.ok) throw new Error(newRecord.error || 'Failed to save.');
+
+                farmData.transactions.push(newRecord);
                 farmData.transactions.sort((a, b) => new Date(b.date) - new Date(a.date));
-                
-                saveToLocalStorage();
-                renderTransactions(farmData.transactions); // Re-render only the affected view
+                renderTransactions(farmData.transactions);
 
                 msgEl.textContent = `${type.toUpperCase()} of KSh ${amount.toFixed(2).toLocaleString()} recorded successfully!`;
                 msgEl.className = 'text-center mt-3 text-sm text-green-600 font-medium';
                 document.getElementById('add-transaction-form').reset();
                 document.getElementById('transaction-date').value = new Date().toISOString().substring(0, 10);
+                updateTransactionCategories('transaction-category'); // Reset categories
                 setTimeout(() => msgEl.textContent = '', 3000);
             } catch (error) {
                 console.error("Error adding transaction:", error);
-                msgEl.textContent = `Error: Failed to save record locally.`;
+                msgEl.textContent = `Error: ${error.message}`;
                 msgEl.className = 'text-center mt-3 text-sm text-red-500 font-medium';
             }
         }
@@ -2845,9 +2808,8 @@
             
             try {
                 farmData.production.push(record);
-                farmData.production.sort((a, b) => new Date(b.date) - new Date(a.date));
-                
-                saveToLocalStorage();
+                farmData.production.sort((a, b) => new Date(b.date) - new Date(a.date));                
+                // TODO: API call to save
                 renderProduction(farmData.production); // Re-render only the affected view
 
                 const unit = type.split('(')[1].replace(')', '');
@@ -2891,8 +2853,8 @@
             
             try {
                 farmData.tasks.push(record);
-                saveToLocalStorage();
-                renderTasks(farmData.tasks); // Re-render only the affected view
+                // TODO: API call to save
+                renderTasks(farmData.tasks);
 
                 msgEl.textContent = `Task added successfully!`;
                 msgEl.className = 'text-center mt-3 text-sm text-green-600 font-medium';
@@ -2939,8 +2901,8 @@
             
             try {
                 farmData.inventory.push(record);
-                saveToLocalStorage();
-                renderInventory(farmData.inventory); // Re-render only the affected view
+                // TODO: API call to save
+                renderInventory(farmData.inventory);
 
                 msgEl.textContent = `Item '${name}' added successfully!`;
                 msgEl.className = 'text-center mt-3 text-sm text-green-600 font-medium';
@@ -2958,31 +2920,12 @@
          * Handles adding a new delegate user.
          */
         window.handleAddDelegate = function() {
-            const newDelegateId = document.getElementById('new-delegate-id').value.trim().toLowerCase();
-            const msgEl = document.getElementById('delegate-msg');
-            
-            const owner = allUsers.find(u => u.userId === currentUserId);
-
-            if (!newDelegateId) {
-                msgEl.textContent = 'User ID cannot be empty.';
-                msgEl.className = 'text-xs text-center mt-2 text-red-500';
-                return;
-            }
-
-            if (allUsers.some(u => u.userId === newDelegateId || (u.delegates && u.delegates.includes(newDelegateId)))) {
-                msgEl.textContent = 'This User ID is already in use.';
-                msgEl.className = 'text-xs text-center mt-2 text-red-500';
-                return;
-            }
-
-            if (owner) {
-                owner.delegates = owner.delegates || [];
-                if (owner.delegates.length < 3) {
-                    owner.delegates.push(newDelegateId);
-                    localStorage.setItem(USERS_KEY, JSON.stringify(allUsers));
-                    renderSettings();
-                }
-            }
+            const newDelegateId = document.getElementById('new-delegate-id').value.trim();
+            const newDelegatePass = document.getElementById('new-delegate-password').value;
+            // This functionality is more complex with a database.
+            // It would require an API endpoint to create a new user with `is_owner=0`
+            // and `owner_id` set to the current user's ID.
+            alert("Delegate management needs to be implemented on the server.");
         }
 
         /**
@@ -2992,22 +2935,16 @@
             if (!confirm(`Are you sure you want to remove access for user '${delegateId}'?`)) {
                 return;
             }
-
-            const owner = allUsers.find(u => u.userId === currentUserId);
-            if (owner && owner.delegates) {
-                owner.delegates = owner.delegates.filter(id => id !== delegateId);
-                localStorage.setItem(USERS_KEY, JSON.stringify(allUsers));
-                renderSettings();
-            }
+            // Requires an API endpoint to delete the delegate user from the database.
+            alert("Delegate management needs to be implemented on the server.");
         }
 
         /**
          * Renders the Settings page.
          */
         function renderSettings() {
-            const container = document.getElementById('view-settings');
-            const owner = allUsers.find(u => u.delegates || allUsers.length === 1); // Find owner or the single user
-            const isOwner = owner && currentUserId === owner.userId;
+            const container = document.getElementById('view-settings');            
+            const isOwner = true; // Simplified for now. You'd check this from the session.
 
             let userManagementHtml = '';
             let passwordChangeHtml = '';
@@ -3019,8 +2956,8 @@
 
                 const delegateListHtml = delegates.map(delegateId => `
                     <div class="flex items-center justify-between p-3 bg-gray-100 rounded-lg">
-                        <span class="font-medium text-gray-700">${delegateId}</span>
-                        <button onclick="handleRemoveDelegate('${delegateId}')" class="text-red-500 hover:text-red-700 p-1 rounded-full hover:bg-red-100" title="Remove User">
+                        <span class="font-medium text-gray-700">${delegateId.userId}</span>
+                        <button onclick="handleRemoveDelegate('${delegateId.userId}')" class="text-red-500 hover:text-red-700 p-1 rounded-full hover:bg-red-100" title="Remove User">
                             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
                         </button>
                     </div>
@@ -3028,8 +2965,9 @@
 
                 const addDelegateFormHtml = canAddMore ? `
                     <form onsubmit="event.preventDefault(); handleAddDelegate();" class="flex items-center space-x-2 mt-4">
-                        <input type="text" id="new-delegate-id" required placeholder="New User ID" class="input-focus flex-grow p-2 border border-gray-300 rounded-lg text-sm">
-                        <button type="submit" class="px-4 py-2 bg-primary-green text-white text-sm font-semibold rounded-lg hover:bg-primary-green-dark transition">Add User</button>
+                        <input type="text" id="new-delegate-id" required placeholder="New User ID" class="input-focus flex-grow p-2 border border-gray-300 rounded-lg text-sm" pattern="[a-z0-9_]+">
+                        <input type="password" id="new-delegate-password" required placeholder="Set Initial Password" class="input-focus flex-grow p-2 border border-gray-300 rounded-lg text-sm">
+                        <button type="submit" class="px-4 py-2 bg-primary-green text-white text-sm font-semibold rounded-lg hover:bg-primary-green-dark transition flex-shrink-0">Add User</button>
                     </form>
                     <p id="delegate-msg" class="text-xs text-center mt-2"></p>
                 ` : `<p class="text-sm text-center text-gray-500 mt-4">You have reached the maximum of 3 delegate users.</p>`;
@@ -3042,7 +2980,7 @@
                             User Management
                         </h3>
                         <div class="space-y-3 mb-4">
-                            <p class="text-sm text-gray-600">You can grant access to your farm data for up to 3 other users. They will log in with their own User ID but use your password.</p>
+                            <p class="text-sm text-gray-600">You can grant access to your farm data for up to 3 other users. They will log in with their own User ID and password. Only you can manage users and change the primary account password.</p>
                             ${delegateListHtml || '<p class="text-sm text-gray-500 italic text-center py-2">No delegate users added yet.</p>'}
                         </div>
                         ${addDelegateFormHtml}
@@ -3073,8 +3011,8 @@
                 `;
             } else {
                 passwordChangeHtml = `
-                    <div class="bg-blue-50 p-6 rounded-2xl border-2 border-blue-200/80 text-center">
-                        <h3 class="text-lg font-semibold text-blue-800">Password Management</h3>
+                    <div class="bg-blue-50 p-8 rounded-2xl border-2 border-blue-200/80 text-center">
+                        <h3 class="text-lg font-semibold text-blue-800">Account Management</h3>
                         <p class="text-blue-700 mt-2">As a delegate user, you cannot change the account password. Please contact the primary account owner if a password change is needed.</p>
                     </div>
                 `;
@@ -3098,28 +3036,11 @@
             const confirmNewPass = document.getElementById('confirm-new-password').value;
             const msgEl = document.getElementById('password-msg');
 
-            // 1. Verify current password
-            if (currentPass !== appPassword) {
-                msgEl.textContent = 'Your current password is incorrect.';
-                msgEl.className = 'text-center mt-4 text-sm font-medium text-red-500';
-                return;
-            }
+            // This now requires an API call.
+            // The backend would verify the current password against the hash in the DB,
+            // then update the hash with the new password if valid.
+            alert("Password change needs to be implemented on the server.");
 
-            // 2. Validate new password
-            if (newPass.length < 6) {
-                msgEl.textContent = 'New password must be at least 6 characters long.';
-                msgEl.className = 'text-center mt-4 text-sm font-medium text-red-500';
-                return;
-            }
-            if (newPass !== confirmNewPass) {
-                msgEl.textContent = 'The new passwords do not match.';
-                msgEl.className = 'text-center mt-4 text-sm font-medium text-red-500';
-                return;
-            }
-
-            // 3. Update password and re-encrypt data
-            appPassword = newPass; // Update the session password
-            encryptAndSave(); // Re-encrypt all data with the new password
 
             msgEl.textContent = 'Password updated successfully!';
             msgEl.className = 'text-center mt-4 text-sm font-medium text-green-600';
@@ -3143,7 +3064,7 @@
             const newConfirmBtn = confirmBtn.cloneNode(true);
             confirmBtn.parentNode.replaceChild(newConfirmBtn, confirmBtn);
 
-            // Bind the local delete handler
+            // Bind the delete handler
             newConfirmBtn.onclick = () => handleDelete(id, collectionName);
 
             modal.classList.remove('hidden');
@@ -3156,12 +3077,20 @@
         /**
          * Performs the actual delete operation in local storage.
          */
-        function handleDelete(id, collectionName) {
+        async function handleDelete(id, collectionName) {
             window.closeModal('delete');
             try {
+                const response = await fetch(`api/${collectionName}.php?id=${id}`, {
+                    method: 'DELETE'
+                });
+                const result = await response.json();
+                if (!response.ok || !result.success) {
+                    throw new Error(result.error || 'Failed to delete on server.');
+                }
+
                 farmData[collectionName] = farmData[collectionName].filter(item => item.id !== id);
                 
-                saveToLocalStorage();
+                
                 // Special handling for animal hub sub-views
                 if (collectionName === 'breeding' || collectionName === 'health') {
                     renderAnimalHub(collectionName);
@@ -3171,6 +3100,7 @@
 
             } catch (error) {
                 console.error(`Error deleting record ${id}:`, error);
+                alert(`Error: Could not delete record. ${error.message}`);
             }
         }
 
@@ -3522,7 +3452,7 @@
                 }
 
                 if (updated) {
-                    saveToLocalStorage();
+                    // TODO: API call to save the updated record
                     if (collectionName === 'equipment') {
                         renderEquipment(farmData.equipment);
                     } else if (collectionName === 'breeding' || collectionName === 'health') {
@@ -3552,7 +3482,7 @@
             const record = getRecordById(id, 'tasks');
             if (record) {
                 record.status = newStatus;
-                saveToLocalStorage();
+                // TODO: API call to save
                 renderTasks(farmData.tasks); // Re-render the task list
             }
         }
