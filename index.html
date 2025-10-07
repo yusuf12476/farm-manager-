@@ -133,10 +133,16 @@
                     <svg class="w-8 h-8 md:w-10 md:h-10 mr-2 md:mr-3 gradient-text" fill="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8h5z"></path></svg>
                     Farm Tracker <span class="gradient-text ml-2">Pro</span>
                 </h1>
-                <button onclick="handleLogout()" class="flex items-center space-x-2 px-3 py-2 text-sm font-medium text-gray-600 bg-white rounded-lg shadow-sm border border-gray-200 hover:bg-gray-100 transition">
-                    <svg class="w-5 h-5 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"></path></svg>
-                    <span>Logout</span>
-                </button>
+                <div class="flex items-center space-x-2">
+                    <button onclick="changeView('settings')" class="flex items-center space-x-2 px-3 py-2 text-sm font-medium text-gray-600 bg-white rounded-lg shadow-sm border border-gray-200 hover:bg-gray-100 transition">
+                        <svg class="w-5 h-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
+                        <span>Settings</span>
+                    </button>
+                    <button onclick="handleLogout()" class="flex items-center space-x-2 px-3 py-2 text-sm font-medium text-gray-600 bg-white rounded-lg shadow-sm border border-gray-200 hover:bg-gray-100 transition">
+                        <svg class="w-5 h-5 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"></path></svg>
+                        <span>Logout</span>
+                    </button>
+                </div>
             </div>
             <p id="auth-status" class="text-sm text-gray-500 mt-2">Initializing...</p>
         </header>
@@ -210,6 +216,10 @@
 
         <div id="view-analytics" class="view-container hidden">
             <!-- Analytics content will be rendered here -->
+        </div>
+
+        <div id="view-settings" class="view-container hidden">
+            <!-- Settings content will be rendered here -->
         </div>
 
     </div>
@@ -445,7 +455,7 @@
             }
 
             // Add new user
-            allUsers.push({ userId });
+            allUsers.push({ userId, delegates: [] }); // Initialize as an owner with an empty delegates array
             localStorage.setItem(USERS_KEY, JSON.stringify(allUsers));
 
             // Set session and save initial data
@@ -927,7 +937,7 @@
             if (allUsers.length > 0) {
                 renderSecurityModal('login');
             } else {
-                renderSecurityModal('setup');
+                renderSecurityModal('setup', 'Welcome! Create the primary account for your farm.');
             }
         }
 
@@ -935,12 +945,24 @@
             const userId = document.getElementById('login-userid').value.trim().toLowerCase();
             const password = document.getElementById('login-password').value;
 
-            if (!allUsers.find(u => u.userId === userId)) {
+            // Find if the user is an owner or a delegate
+            const owner = allUsers.find(u => u.userId === userId || (u.delegates && u.delegates.includes(userId)));
+
+            if (!owner) {
                 renderSecurityModal('login', 'User ID not found.');
                 return;
             }
 
-            if (decryptAndLoad(userId, password)) {
+            // If the logged-in user is a delegate, we need to use the owner's ID for data decryption.
+            const dataOwnerId = owner.userId;
+            const isDelegate = dataOwnerId !== userId;
+
+            if (decryptAndLoad(dataOwnerId, password)) {
+                // Set the currentUserId to the person who logged in, not necessarily the owner
+                currentUserId = userId;
+                if(isDelegate) {
+                    console.log(`Delegate user '${userId}' logged into owner '${dataOwnerId}' account.`);
+                }
                 startApp();
             } else {
                 renderSecurityModal('login', 'Incorrect password. Please try again.');
@@ -963,7 +985,7 @@
             loadFiltersFromLocalStorage(); // Load UI state for filters first
             isAuthReady = true;
 
-            document.getElementById('auth-status').innerHTML = `User ID: <span class="font-medium text-gray-700">${userId}</span> | <span class="text-secondary-yellow font-semibold">Local Storage Active</span>`;
+            document.getElementById('auth-status').innerHTML = `User ID: <span class="font-medium text-gray-700">${currentUserId}</span> | <span class="text-secondary-yellow font-semibold">Local Storage Active</span>`;
 
             renderAllViews();
             changeView('dashboard');
@@ -995,11 +1017,16 @@
             document.getElementById(`view-${viewName}`).classList.remove('hidden');
 
             document.querySelectorAll('[id^="tab-"]').forEach(el => el.classList.remove('active-tab'));
-            document.getElementById(`tab-${viewName}`).classList.add('active-tab');
+            const activeTab = document.getElementById(`tab-${viewName}`);
+            if (activeTab) {
+                activeTab.classList.add('active-tab');
+            }
 
             // Update mobile dropdown label
             const dropdownLabel = document.getElementById('nav-dropdown-label');
-            if (dropdownLabel) dropdownLabel.textContent = document.getElementById(`tab-${viewName}`).textContent;
+            if (dropdownLabel && activeTab) {
+                dropdownLabel.textContent = activeTab.textContent;
+            }
 
             // Explicitly destroy charts when leaving the finance view to avoid memory leaks
             if (viewName !== 'finance' && viewName !== 'analytics') {
@@ -1022,6 +1049,7 @@
             if (viewName === 'animalhub') renderAnimalHub(); // New hub renderer
             if (viewName === 'equipment') renderEquipment(farmData.equipment);
             if (viewName === 'analytics') renderAnalytics();
+            if (viewName === 'settings') renderSettings();
             if (viewName === 'dashboard') renderDashboard(farmData.livestock, farmData.transactions, farmData.production, farmData.tasks, farmData.inventory, farmData.equipment);
         }
 
@@ -1036,6 +1064,48 @@
                 return;
             }
             
+            // --- User Management Section ---
+            const owner = allUsers.find(u => u.delegates); // Find the owner account (the one with the delegates array)
+            let userManagementHtml = '';
+
+            // Only the owner can see and manage users.
+            if (owner && currentUserId === owner.userId) {
+                const delegates = owner.delegates || [];
+                const canAddMore = delegates.length < 3;
+
+                const delegateListHtml = delegates.map(delegateId => `
+                    <div class="flex items-center justify-between p-3 bg-gray-100 rounded-lg">
+                        <span class="font-medium text-gray-700">${delegateId}</span>
+                        <button onclick="handleRemoveDelegate('${delegateId}')" class="text-red-500 hover:text-red-700 p-1 rounded-full hover:bg-red-100" title="Remove User">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                        </button>
+                    </div>
+                `).join('');
+
+                const addDelegateFormHtml = canAddMore ? `
+                    <form onsubmit="event.preventDefault(); handleAddDelegate();" class="flex items-center space-x-2 mt-4">
+                        <input type="text" id="new-delegate-id" required placeholder="New User ID" class="input-focus flex-grow p-2 border border-gray-300 rounded-lg text-sm">
+                        <button type="submit" class="px-4 py-2 bg-primary-green text-white text-sm font-semibold rounded-lg hover:bg-primary-green-dark transition">Add User</button>
+                    </form>
+                    <p id="delegate-msg" class="text-xs text-center mt-2"></p>
+                ` : `<p class="text-sm text-center text-gray-500 mt-4">You have reached the maximum of 3 delegate users.</p>`;
+
+                userManagementHtml = `
+                    <!-- User Management Card -->
+                    <div class="bg-card-bg p-8 rounded-2xl shadow-lg border border-gray-200/80 mb-10">
+                        <h3 class="text-xl font-semibold text-gray-700 mb-5 flex items-center">
+                            <svg class="w-6 h-6 mr-3 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"></path></svg>
+                            User Management
+                        </h3>
+                        <div class="space-y-3 mb-4">
+                            <p class="text-sm text-gray-600">You can grant access to your farm data for up to 3 other users. They will log in with their own User ID but use your password.</p>
+                            ${delegateListHtml || '<p class="text-sm text-gray-500 italic text-center py-2">No delegate users added yet.</p>'}
+                        </div>
+                        ${addDelegateFormHtml}
+                    </div>
+                `;
+            }
+
             // 0. Overdue Tasks
             const today = new Date();
             today.setHours(0, 0, 0, 0); // Normalize to start of day for comparison
@@ -1202,6 +1272,7 @@
                 <h2 class="text-2xl md:text-3xl font-bold text-gray-800 mb-8">Farm Dashboard</h2>
                 
                 ${overdueTasksCard}
+                ${userManagementHtml}
                 ${lowStockCard}
 
                 <!-- Production Summary Card -->
@@ -2926,6 +2997,137 @@
             }
         }
 
+        /**
+         * Handles adding a new delegate user.
+         */
+        window.handleAddDelegate = function() {
+            const newDelegateId = document.getElementById('new-delegate-id').value.trim().toLowerCase();
+            const msgEl = document.getElementById('delegate-msg');
+            
+            const owner = allUsers.find(u => u.userId === currentUserId);
+
+            if (!newDelegateId) {
+                msgEl.textContent = 'User ID cannot be empty.';
+                msgEl.className = 'text-xs text-center mt-2 text-red-500';
+                return;
+            }
+
+            if (allUsers.some(u => u.userId === newDelegateId || (u.delegates && u.delegates.includes(newDelegateId)))) {
+                msgEl.textContent = 'This User ID is already in use.';
+                msgEl.className = 'text-xs text-center mt-2 text-red-500';
+                return;
+            }
+
+            if (owner) {
+                owner.delegates = owner.delegates || [];
+                if (owner.delegates.length < 3) {
+                    owner.delegates.push(newDelegateId);
+                    localStorage.setItem(USERS_KEY, JSON.stringify(allUsers));
+                    renderDashboard(farmData.livestock, farmData.transactions, farmData.production, farmData.tasks, farmData.inventory);
+                }
+            }
+        }
+
+        /**
+         * Handles removing a delegate user.
+         */
+        window.handleRemoveDelegate = function(delegateId) {
+            if (!confirm(`Are you sure you want to remove access for user '${delegateId}'?`)) {
+                return;
+            }
+
+            const owner = allUsers.find(u => u.userId === currentUserId);
+            if (owner && owner.delegates) {
+                owner.delegates = owner.delegates.filter(id => id !== delegateId);
+                localStorage.setItem(USERS_KEY, JSON.stringify(allUsers));
+                renderDashboard(farmData.livestock, farmData.transactions, farmData.production, farmData.tasks, farmData.inventory);
+            }
+        }
+
+        /**
+         * Renders the Settings page.
+         */
+        function renderSettings() {
+            const container = document.getElementById('view-settings');
+            const owner = allUsers.find(u => u.delegates || allUsers.length === 1); // Find owner or the single user
+            const isOwner = owner && currentUserId === owner.userId;
+
+            let passwordChangeHtml = '';
+            if (isOwner) {
+                passwordChangeHtml = `
+                    <div class="bg-card-bg p-8 rounded-2xl shadow-lg border border-gray-200/80">
+                        <h3 class="text-xl font-bold mb-5 border-b pb-3 text-gray-800">Change Your Password</h3>
+                        <form id="change-password-form" onsubmit="event.preventDefault(); handleChangePassword();">
+                            <div class="mb-4">
+                                <label for="current-password" class="block text-sm font-medium text-gray-700 mb-1">Current Password</label>
+                                <input type="password" id="current-password" required placeholder="Enter your current password" class="input-focus w-full p-3 border border-gray-300 rounded-lg">
+                            </div>
+                            <div class="mb-4">
+                                <label for="new-password" class="block text-sm font-medium text-gray-700 mb-1">New Password</label>
+                                <input type="password" id="new-password" required placeholder="Enter a new strong password" class="input-focus w-full p-3 border border-gray-300 rounded-lg">
+                            </div>
+                            <div class="mb-6">
+                                <label for="confirm-new-password" class="block text-sm font-medium text-gray-700 mb-1">Confirm New Password</label>
+                                <input type="password" id="confirm-new-password" required placeholder="Confirm your new password" class="input-focus w-full p-3 border border-gray-300 rounded-lg">
+                            </div>
+                            <button type="submit" class="w-full bg-primary-green text-white py-3 rounded-lg font-bold hover:bg-primary-green-dark transition shadow-md">Update Password</button>
+                            <p id="password-msg" class="text-center mt-4 text-sm font-medium"></p>
+                        </form>
+                    </div>
+                `;
+            } else {
+                passwordChangeHtml = `
+                    <div class="bg-blue-50 p-6 rounded-2xl border-2 border-blue-200/80 text-center">
+                        <h3 class="text-lg font-semibold text-blue-800">Password Management</h3>
+                        <p class="text-blue-700 mt-2">As a delegate user, you cannot change the account password. Please contact the primary account owner if a password change is needed.</p>
+                    </div>
+                `;
+            }
+
+            container.innerHTML = `
+                <h2 class="text-2xl md:text-3xl font-bold text-gray-800 mb-8">Account Settings</h2>
+                <div class="max-w-2xl mx-auto">
+                    ${passwordChangeHtml}
+                </div>
+            `;
+        }
+
+        /**
+         * Handles the password change request from the Settings page.
+         */
+        window.handleChangePassword = function() {
+            const currentPass = document.getElementById('current-password').value;
+            const newPass = document.getElementById('new-password').value;
+            const confirmNewPass = document.getElementById('confirm-new-password').value;
+            const msgEl = document.getElementById('password-msg');
+
+            // 1. Verify current password
+            if (currentPass !== appPassword) {
+                msgEl.textContent = 'Your current password is incorrect.';
+                msgEl.className = 'text-center mt-4 text-sm font-medium text-red-500';
+                return;
+            }
+
+            // 2. Validate new password
+            if (newPass.length < 6) {
+                msgEl.textContent = 'New password must be at least 6 characters long.';
+                msgEl.className = 'text-center mt-4 text-sm font-medium text-red-500';
+                return;
+            }
+            if (newPass !== confirmNewPass) {
+                msgEl.textContent = 'The new passwords do not match.';
+                msgEl.className = 'text-center mt-4 text-sm font-medium text-red-500';
+                return;
+            }
+
+            // 3. Update password and re-encrypt data
+            appPassword = newPass; // Update the session password
+            encryptAndSave(); // Re-encrypt all data with the new password
+
+            msgEl.textContent = 'Password updated successfully!';
+            msgEl.className = 'text-center mt-4 text-sm font-medium text-green-600';
+            document.getElementById('change-password-form').reset();
+        }
 
         // --- DELETE MODAL HANDLERS ---
 
