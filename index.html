@@ -1064,48 +1064,6 @@
                 return;
             }
             
-            // --- User Management Section ---
-            const owner = allUsers.find(u => u.delegates); // Find the owner account (the one with the delegates array)
-            let userManagementHtml = '';
-
-            // Only the owner can see and manage users.
-            if (owner && currentUserId === owner.userId) {
-                const delegates = owner.delegates || [];
-                const canAddMore = delegates.length < 3;
-
-                const delegateListHtml = delegates.map(delegateId => `
-                    <div class="flex items-center justify-between p-3 bg-gray-100 rounded-lg">
-                        <span class="font-medium text-gray-700">${delegateId}</span>
-                        <button onclick="handleRemoveDelegate('${delegateId}')" class="text-red-500 hover:text-red-700 p-1 rounded-full hover:bg-red-100" title="Remove User">
-                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
-                        </button>
-                    </div>
-                `).join('');
-
-                const addDelegateFormHtml = canAddMore ? `
-                    <form onsubmit="event.preventDefault(); handleAddDelegate();" class="flex items-center space-x-2 mt-4">
-                        <input type="text" id="new-delegate-id" required placeholder="New User ID" class="input-focus flex-grow p-2 border border-gray-300 rounded-lg text-sm">
-                        <button type="submit" class="px-4 py-2 bg-primary-green text-white text-sm font-semibold rounded-lg hover:bg-primary-green-dark transition">Add User</button>
-                    </form>
-                    <p id="delegate-msg" class="text-xs text-center mt-2"></p>
-                ` : `<p class="text-sm text-center text-gray-500 mt-4">You have reached the maximum of 3 delegate users.</p>`;
-
-                userManagementHtml = `
-                    <!-- User Management Card -->
-                    <div class="bg-card-bg p-8 rounded-2xl shadow-lg border border-gray-200/80 mb-10">
-                        <h3 class="text-xl font-semibold text-gray-700 mb-5 flex items-center">
-                            <svg class="w-6 h-6 mr-3 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"></path></svg>
-                            User Management
-                        </h3>
-                        <div class="space-y-3 mb-4">
-                            <p class="text-sm text-gray-600">You can grant access to your farm data for up to 3 other users. They will log in with their own User ID but use your password.</p>
-                            ${delegateListHtml || '<p class="text-sm text-gray-500 italic text-center py-2">No delegate users added yet.</p>'}
-                        </div>
-                        ${addDelegateFormHtml}
-                    </div>
-                `;
-            }
-
             // 0. Overdue Tasks
             const today = new Date();
             today.setHours(0, 0, 0, 0); // Normalize to start of day for comparison
@@ -1272,7 +1230,6 @@
                 <h2 class="text-2xl md:text-3xl font-bold text-gray-800 mb-8">Farm Dashboard</h2>
                 
                 ${overdueTasksCard}
-                ${userManagementHtml}
                 ${lowStockCard}
 
                 <!-- Production Summary Card -->
@@ -3023,7 +2980,7 @@
                 if (owner.delegates.length < 3) {
                     owner.delegates.push(newDelegateId);
                     localStorage.setItem(USERS_KEY, JSON.stringify(allUsers));
-                    renderDashboard(farmData.livestock, farmData.transactions, farmData.production, farmData.tasks, farmData.inventory);
+                    renderSettings();
                 }
             }
         }
@@ -3040,7 +2997,7 @@
             if (owner && owner.delegates) {
                 owner.delegates = owner.delegates.filter(id => id !== delegateId);
                 localStorage.setItem(USERS_KEY, JSON.stringify(allUsers));
-                renderDashboard(farmData.livestock, farmData.transactions, farmData.production, farmData.tasks, farmData.inventory);
+                renderSettings();
             }
         }
 
@@ -3052,8 +3009,47 @@
             const owner = allUsers.find(u => u.delegates || allUsers.length === 1); // Find owner or the single user
             const isOwner = owner && currentUserId === owner.userId;
 
+            let userManagementHtml = '';
             let passwordChangeHtml = '';
+
             if (isOwner) {
+                // --- User Management Section ---
+                const delegates = owner.delegates || [];
+                const canAddMore = delegates.length < 3;
+
+                const delegateListHtml = delegates.map(delegateId => `
+                    <div class="flex items-center justify-between p-3 bg-gray-100 rounded-lg">
+                        <span class="font-medium text-gray-700">${delegateId}</span>
+                        <button onclick="handleRemoveDelegate('${delegateId}')" class="text-red-500 hover:text-red-700 p-1 rounded-full hover:bg-red-100" title="Remove User">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                        </button>
+                    </div>
+                `).join('');
+
+                const addDelegateFormHtml = canAddMore ? `
+                    <form onsubmit="event.preventDefault(); handleAddDelegate();" class="flex items-center space-x-2 mt-4">
+                        <input type="text" id="new-delegate-id" required placeholder="New User ID" class="input-focus flex-grow p-2 border border-gray-300 rounded-lg text-sm">
+                        <button type="submit" class="px-4 py-2 bg-primary-green text-white text-sm font-semibold rounded-lg hover:bg-primary-green-dark transition">Add User</button>
+                    </form>
+                    <p id="delegate-msg" class="text-xs text-center mt-2"></p>
+                ` : `<p class="text-sm text-center text-gray-500 mt-4">You have reached the maximum of 3 delegate users.</p>`;
+
+                userManagementHtml = `
+                    <!-- User Management Card -->
+                    <div class="bg-card-bg p-8 rounded-2xl shadow-lg border border-gray-200/80 mt-10">
+                        <h3 class="text-xl font-bold mb-5 border-b pb-3 text-gray-800 flex items-center">
+                            <svg class="w-6 h-6 mr-3 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"></path></svg>
+                            User Management
+                        </h3>
+                        <div class="space-y-3 mb-4">
+                            <p class="text-sm text-gray-600">You can grant access to your farm data for up to 3 other users. They will log in with their own User ID but use your password.</p>
+                            ${delegateListHtml || '<p class="text-sm text-gray-500 italic text-center py-2">No delegate users added yet.</p>'}
+                        </div>
+                        ${addDelegateFormHtml}
+                    </div>
+                `;
+
+                // --- Password Change Section ---
                 passwordChangeHtml = `
                     <div class="bg-card-bg p-8 rounded-2xl shadow-lg border border-gray-200/80">
                         <h3 class="text-xl font-bold mb-5 border-b pb-3 text-gray-800">Change Your Password</h3>
@@ -3088,6 +3084,7 @@
                 <h2 class="text-2xl md:text-3xl font-bold text-gray-800 mb-8">Account Settings</h2>
                 <div class="max-w-2xl mx-auto">
                     ${passwordChangeHtml}
+                    ${userManagementHtml}
                 </div>
             `;
         }
