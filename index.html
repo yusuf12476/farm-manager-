@@ -36,14 +36,14 @@
         
         body {
             font-family: 'Inter', sans-serif; /* Use the custom font */
-            background-color: theme('colors.bg-light');
-            color: theme('colors.gray.700');
+            background-color: #f4f7f9;
+            color: #374151;
             -webkit-font-smoothing: antialiased;
             -moz-osx-font-smoothing: grayscale;
         }
         
         .gradient-text {
-            background: linear-gradient(to right, theme('colors.primary-green'), theme('colors.primary-green-dark'));
+            background: linear-gradient(to right, #059669, #047857);
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
         }
@@ -1567,7 +1567,7 @@
                     endContainer?.classList.remove('hidden');
                     // Reset custom date values if they were empty
                     if (startDateInput && !viewFilters.finance.startDate) viewFilters.finance.startDate = startDateInput.value;
-                    if (endDateInput && !financeFilters.finance.endDate) viewFilters.finance.endDate = endDateInput.value;
+                    if (endDateInput && !viewFilters.finance.endDate) viewFilters.finance.endDate = endDateInput.value;
                 } else {
                     startContainer?.classList.add('hidden');
                     endContainer?.classList.add('hidden');
