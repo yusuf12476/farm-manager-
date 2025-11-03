@@ -6,6 +6,8 @@
     <title>Farm Tracker Pro</title>
     <!-- App Icon (Favicon) -->
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><path fill='%23059669' d='M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8h5z'/></svg>">
+    <!-- Apple Touch Icon for "Add to Home Screen" -->
+    <link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><path fill='%23059669' d='M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8h5z'/></svg>">
     <!-- Load Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- Load Chart.js for data visualization -->
@@ -278,6 +280,7 @@
         };
         let expenseChart = null;
         let monthlyChart = null;
+        let currentMonthTrendChart = null;
         let incomeChart = null;
         let yoyProductionChart = null;
         let productionTrendChart = null;
@@ -300,6 +303,7 @@
 
 
         window.farmData = {
+            farmName: 'My Farm',
             livestock: [],
             transactions: [],
             production: [],
@@ -313,7 +317,7 @@
             productionTypes: ["Milk (Liters)", "Eggs (Dozens)", "Honey (KGs)"],
             transactionCategories: {
                 'expense': ['Feed/Hay', 'Fertilizer/Seed', 'Equipment/Maintenance', 'Labor', 'Fuel/Utilities', 'Other Input'],
-                'income': ['Sales: Cattle', 'Sales: Poultry', 'Sales: Wool/Fiber', 'Sales: Honey', 'Sales: Dairy', 'Other Income']
+                'income': ['Sales: Livestock', 'Sales: Cattle', 'Sales: Poultry', 'Sales: Wool/Fiber', 'Sales: Honey', 'Sales: Dairy', 'Other Income']
             },
             taskPriorities: ['High', 'Medium', 'Low'],
             taskStatuses: ['To Do', 'In Progress', 'Done'],
@@ -349,6 +353,7 @@
                 html = `
                     <h3 class="text-lg md:text-xl font-bold mb-2 text-gray-800">Create Your Account</h3>
                     <p class="text-sm text-gray-600 mb-4">Create a User ID and password to secure your farm data.</p>
+                    <input type="text" id="setup-farmname" required placeholder="Your Farm's Name" class="input-focus w-full p-3 border border-gray-300 rounded-lg mb-2">
                     <form onsubmit="event.preventDefault(); handleCreateUser();">
                         <input type="text" id="setup-userid" required placeholder="Create a User ID" class="input-focus w-full p-3 border border-gray-300 rounded-lg mb-2">
                         <input type="password" id="setup-password" required placeholder="Create a strong password" class="input-focus w-full p-3 border border-gray-300 rounded-lg mb-2">
@@ -378,9 +383,15 @@
         }
 
         async function handleCreateUser() {
+            const farmName = document.getElementById('setup-farmname').value.trim();
             const userId = document.getElementById('setup-userid').value.trim();
             const pass = document.getElementById('setup-password').value;
             const confirmPass = document.getElementById('setup-password-confirm').value;
+
+            if (!farmName) {
+                renderSecurityModal('setup', 'Farm Name is required.');
+                return;
+            }
 
             if (pass.length < 6) {
                 renderSecurityModal('setup', 'Password must be at least 6 characters long.');
@@ -393,6 +404,8 @@
             
             owner = { userId, password: pass };
             localStorage.setItem('farmOwner', JSON.stringify(owner));
+            window.farmData.farmName = farmName;
+            saveData();
 
             // After successful registration, log in automatically
             await handleLogin(userId, pass);
@@ -922,9 +935,9 @@
         function renderAllViews() {
             const { livestock, transactions, production, tasks, inventory } = farmData;
             renderDashboard(livestock, transactions, production, tasks, inventory);
+            //renderDashboard(livestock, transactions, production, tasks, inventory, farmData.equipment);
             // Other views are rendered on demand when their tab is clicked or data changes.
         }
-        
         // --- UI RENDERING AND LOGIC ---
 
         /**
@@ -951,6 +964,7 @@
             if (viewName !== 'finance' && viewName !== 'analytics') {
                  if (expenseChart) { expenseChart.destroy(); expenseChart = null; }
                  if (monthlyChart) { monthlyChart.destroy(); monthlyChart = null; }
+                 if (currentMonthTrendChart) { currentMonthTrendChart.destroy(); currentMonthTrendChart = null; }
                  if (incomeChart) { incomeChart.destroy(); incomeChart = null; }
                  if (yoyProductionChart) { yoyProductionChart.destroy(); yoyProductionChart = null; }
                  if (productionTrendChart) { productionTrendChart.destroy(); productionTrendChart = null; }
@@ -970,7 +984,7 @@
             if (viewName === 'equipment') renderEquipment(farmData.equipment);
             if (viewName === 'analytics') renderAnalytics();
             if (viewName === 'settings') renderSettings();
-            if (viewName === 'dashboard') renderDashboard(farmData.livestock, farmData.transactions, farmData.production, farmData.tasks, farmData.inventory, farmData.equipment);
+            if (viewName === 'dashboard') renderDashboard(farmData.livestock, farmData.transactions, farmData.production, farmData.tasks, farmData.inventory);
         }
 
         /**
@@ -1001,20 +1015,18 @@
             today.setHours(0, 0, 0, 0); // Normalize to start of day for comparison
             const overdueTasks = tasks.filter(t => t.status !== 'Done' && new Date(t.dueDate) < today);
 
-            let overdueTasksHtml = overdueTasks.map(task => `
-                <div class="flex items-center justify-between p-3 bg-red-50/80 rounded-lg border border-red-200/90 hover:bg-red-100/50 transition-colors duration-200">
-                    <div class="cursor-pointer flex-grow" onclick="navigateTo('tasks', { isOverdue: true })">
-                        <p class="font-semibold text-red-800">${task.title}</p>
-                        <p class="text-xs text-red-600 font-bold">Due: ${task.dueDate}</p>
-                    </div>
-                    <button onclick="navigateTo('tasks', { isOverdue: true })" class="text-xs font-medium text-blue-600 hover:underline">View All</button>
-                </div>
-            `).join('');
-
             const overdueTasksCard = overdueTasks.length > 0 ? `
                 <div class="bg-red-50/60 p-6 rounded-2xl shadow-md border-2 border-red-200/80 mb-10 cursor-pointer hover:shadow-xl transition-shadow" onclick="navigateTo('tasks', { isOverdue: true })">
                     <h3 class="text-xl font-semibold text-red-700 mb-4 flex items-center"><svg class="w-6 h-6 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>Overdue Tasks (${overdueTasks.length})</h3>
-                    <div class="space-y-3">${overdueTasksHtml}</div>
+                    <div class="space-y-3">${overdueTasks.map(task => `
+                        <div class="flex items-center justify-between p-3 bg-red-50/80 rounded-lg border border-red-200/90 hover:bg-red-100/50 transition-colors duration-200">
+                            <div class="cursor-pointer flex-grow" onclick="navigateTo('tasks', { isOverdue: true })">
+                                <p class="font-semibold text-red-800">${task.title}</p>
+                                <p class="text-xs text-red-600 font-bold">Due: ${task.dueDate}</p>
+                            </div>
+                            <button onclick="navigateTo('tasks', { isOverdue: true })" class="text-xs font-medium text-blue-600 hover:underline">View All</button>
+                        </div>
+                    `).join('')}</div>
                 </div>` : '';
 
             // Calculate 30-day production summary
@@ -1097,53 +1109,38 @@
                 `;
             }).join('');
 
-            if (tasksHtml === '') {
-                tasksHtml = `<p class="text-center text-gray-500 italic py-4">No upcoming tasks. You're all caught up!</p>`;
-            }
-
             // 4. Upcoming Births Summary
             const upcomingBirths = farmData.breeding
                 .filter(b => {
                     const daysRemaining = getDaysDifference(b.expectedDueDate);
                     return b.status === 'In Calf/Farrow' && daysRemaining >= 0 && daysRemaining <= 30;
                 })
-                .sort((a, b) => new Date(a.expectedDueDate) - new Date(b.expectedDueDate));
-
-            let birthsHtml = upcomingBirths.map(birth => {
-                const daysRemaining = getDaysDifference(birth.expectedDueDate);
-                const dueText = daysRemaining === 0 ? 'Due Today' : `${daysRemaining} days`;
-                const dueColor = daysRemaining <= 7 ? 'text-red-600 font-bold' : 'text-blue-600 font-medium';
-                return `
-                    <div class="flex items-center justify-between p-3 bg-gray-50/80 rounded-lg border border-gray-200/90 hover:bg-white transition-colors duration-200 cursor-pointer" onclick="navigateTo('animalhub')">
-                        <div>
-                            <p class="font-semibold text-gray-800">${birth.animalId} <span class="text-sm font-normal text-gray-500">(${birth.species})</span></p>
-                            <p class="text-xs text-gray-600">Due: ${birth.expectedDueDate}</p>
-                        </div>
-                        <span class="text-xs ${dueColor}">${dueText}</span>
-                    </div>
-                `;
-            }).join('');
+                .sort((a, b) => new Date(a.expectedDueDate) - new Date(b.expectedDueDate))
+                .slice(0, 3); // Get top 3
 
             const upcomingBirthsCard = upcomingBirths.length > 0 ? `
-                <div class="lg:col-span-2 bg-card-bg p-8 rounded-2xl shadow-lg border border-gray-200/80 cursor-pointer hover:shadow-xl transition-shadow" onclick="navigateTo('animalhub')">
+                <div class="bg-card-bg p-8 rounded-2xl shadow-lg border border-gray-200/80 cursor-pointer hover:shadow-xl transition-shadow" onclick="navigateTo('animalhub')">
                     <h3 class="text-xl font-semibold text-gray-700 mb-5 flex items-center">Upcoming Births (Next 30 Days)</h3>
-                    <div class="space-y-3">${birthsHtml}</div>
+                    <div class="space-y-3">${upcomingBirths.map(birth => {
+                        const daysRemaining = getDaysDifference(birth.expectedDueDate);
+                        const dueText = daysRemaining === 0 ? 'Due Today' : `${daysRemaining} days`;
+                        const dueColor = daysRemaining <= 7 ? 'text-red-600 font-bold' : 'text-blue-600 font-medium';
+                        return `
+                            <div class="flex items-center justify-between p-3 bg-gray-50/80 rounded-lg border border-gray-200/90 hover:bg-white transition-colors duration-200 cursor-pointer" onclick="navigateTo('animalhub')">
+                                <div>
+                                    <p class="font-semibold text-gray-800">${birth.animalId} <span class="text-sm font-normal text-gray-500">(${birth.species})</span></p>
+                                    <p class="text-xs text-gray-600">Due: ${birth.expectedDueDate}</p>
+                                </div>
+                                <span class="text-xs ${dueColor}">${dueText}</span>
+                            </div>
+                        `;
+                    }).join('')}</div>
                 </div>` : '';
 
-            // 4. Low Stock Alerts
+            // 5. Low Stock Alerts
             const lowStockItems = inventory.filter(item => 
                 item.lowStockThreshold !== null && parseFloat(item.quantity) <= parseFloat(item.lowStockThreshold)
             );
-
-            let lowStockHtml = lowStockItems.map(item => `
-                <div class="flex items-center justify-between p-3 bg-red-50/80 rounded-lg border border-red-200/90 hover:bg-red-100/50 transition-colors duration-200">
-                    <div class="cursor-pointer flex-grow" onclick="navigateTo('inventory')">
-                        <p class="font-semibold text-red-800">${item.name}</p>
-                        <p class="text-xs text-red-600">Current: ${item.quantity} ${item.unit} | Alert Level: ${item.lowStockThreshold} ${item.unit}</p>
-                    </div>
-                    <button onclick="navigateTo('inventory')" class="text-xs font-medium text-blue-600 hover:underline">View All</button>
-                </div>
-            `).join('');
 
             const lowStockCard = lowStockItems.length > 0 ? `
                 <div class="bg-red-50/60 p-6 rounded-2xl shadow-md border-2 border-red-200/80 mb-10 cursor-pointer hover:shadow-xl transition-shadow" onclick="navigateTo('inventory')">
@@ -1152,7 +1149,15 @@
                         Low Stock Alerts
                     </h3>
                     <div class="space-y-3">
-                        ${lowStockHtml}
+                        ${lowStockItems.map(item => `
+                            <div class="flex items-center justify-between p-3 bg-red-50/80 rounded-lg border border-red-200/90 hover:bg-red-100/50 transition-colors duration-200">
+                                <div class="cursor-pointer flex-grow" onclick="navigateTo('inventory')">
+                                    <p class="font-semibold text-red-800">${item.name}</p>
+                                    <p class="text-xs text-red-600">Current: ${item.quantity} ${item.unit} | Alert Level: ${item.lowStockThreshold} ${item.unit}</p>
+                                </div>
+                                <button onclick="navigateTo('inventory')" class="text-xs font-medium text-blue-600 hover:underline">View All</button>
+                            </div>
+                        `).join('')}
                     </div>
                 </div>
             ` : '';
@@ -1206,12 +1211,12 @@
                             Upcoming Tasks
                         </h3>
                         <div class="space-y-3">
-                            ${tasksHtml}
+                            ${tasksHtml || `<p class="text-center text-gray-500 italic py-4">No upcoming tasks. You're all caught up!</p>`}
                         </div>
                     </div>
                 </div>
 
-                ${upcomingBirthsCard ? `<div class="grid grid-cols-1 lg:grid-cols-2 gap-10">${upcomingBirthsCard}</div>` : ''}
+                ${upcomingBirthsCard ? `<div class="grid grid-cols-1 lg:grid-cols-2 gap-10 mb-10">${upcomingBirthsCard}</div>` : ''}
 
                 <!-- Finance Summary Card -->
                 <div class="bg-card-bg p-8 rounded-2xl shadow-lg border border-gray-200/80 mt-10">
@@ -1274,6 +1279,10 @@
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
+                    animation: {
+                        duration: 1000,
+                        easing: 'easeOutQuart',
+                    },
                     plugins: {
                         legend: { position: 'right', labels: { boxWidth: 12, font: { size: 11 } } },
                         tooltip: {
@@ -1329,6 +1338,10 @@
                 },
                 options: {
                     responsive: true, maintainAspectRatio: false,
+                    animation: {
+                        duration: 1000,
+                        easing: 'easeOutQuart',
+                    },
                     scales: { x: { grid: { display: false } }, y: { beginAtZero: true, title: { display: true, text: 'Head Count' } } },
                     plugins: { legend: { display: false }, tooltip: { callbacks: { label: (c) => ` ${c.dataset.label}: ${c.parsed.y.toLocaleString()}` } } }
                 }
@@ -1605,14 +1618,16 @@
             const expenseLabels = Object.keys(expenseData);
             const expenseAmounts = Object.values(expenseData);
             
+            // Updated color palette for better visual distinction
             const categoryColors = [
-                '#059669', '#10b981', '#34d399', '#f59e0b', '#fbbf24', 
-                '#f87171', '#ef4444', '#a855f7', '#8b5cf6', '#3b82f6', '#4f46e5', '#ec4899'
+                '#059669', '#f59e0b', '#3b82f6', '#ef4444', '#8b5cf6', '#14b8a6',
+                '#d946ef', '#65a30d', '#0891b2', '#f97316', '#4338ca', '#be185d'
             ];
             
             // Destroy previous instance
             if (expenseChart) expenseChart.destroy();
             if (incomeChart) incomeChart.destroy();
+            if (currentMonthTrendChart) { currentMonthTrendChart.destroy(); currentMonthTrendChart = null; }
 
             const pieCtx = document.getElementById('expense-pie-chart')?.getContext('2d');
             if (pieCtx && expenseAmounts.length > 0) {
@@ -1630,6 +1645,10 @@
                     options: {
                         responsive: true,
                         maintainAspectRatio: false,
+                        animation: {
+                            duration: 1000,
+                            easing: 'easeOutQuart',
+                        },
                         plugins: {
                             legend: {
                                 position: 'right',
@@ -1683,6 +1702,10 @@
                     options: {
                         responsive: true,
                         maintainAspectRatio: false,
+                        animation: {
+                            duration: 1000,
+                            easing: 'easeOutQuart',
+                        },
                         plugins: {
                             legend: {
                                 position: 'right',
@@ -1791,6 +1814,10 @@
                     options: {
                         responsive: true,
                         maintainAspectRatio: false,
+                        animation: {
+                            duration: 1200,
+                            easing: 'easeOutCubic',
+                        },
                         interaction: {
                             intersect: false,
                             mode: 'index',
@@ -1822,6 +1849,81 @@
             } else if (barCtx) {
                  barCtx.canvas.parentNode.innerHTML = '<p class="text-center text-gray-500 py-16">No transactions in the last 12 months to chart.</p>';
             }
+        }
+
+        /**
+         * Renders the daily profitability trend for the current month.
+         */
+        function renderCurrentMonthTrendChart(transactions) {
+            if (currentMonthTrendChart) currentMonthTrendChart.destroy();
+            const ctx = document.getElementById('current-month-trend-chart')?.getContext('2d');
+            if (!ctx) return;
+
+            const today = new Date();
+            const currentYear = today.getFullYear();
+            const currentMonth = today.getMonth();
+            const daysInMonth = new Date(currentYear, currentMonth + 1, 0).getDate();
+
+            const labels = Array.from({ length: daysInMonth }, (_, i) => i + 1);
+            const dailyIncome = Array(daysInMonth).fill(0);
+            const dailyExpense = Array(daysInMonth).fill(0);
+
+            transactions
+                .filter(t => {
+                    const tDate = new Date(t.date);
+                    return tDate.getFullYear() === currentYear && tDate.getMonth() === currentMonth;
+                })
+                .forEach(t => {
+                    const dayOfMonth = new Date(t.date).getDate() - 1; // 0-indexed
+                    if (t.type === 'income') {
+                        dailyIncome[dayOfMonth] += parseFloat(t.amount);
+                    } else {
+                        dailyExpense[dayOfMonth] += parseFloat(t.amount);
+                    }
+                });
+
+            // Calculate cumulative values
+            const cumulativeIncome = dailyIncome.reduce((acc, val, i) => { acc.push((acc[i-1] || 0) + val); return acc; }, []);
+            const cumulativeExpense = dailyExpense.reduce((acc, val, i) => { acc.push((acc[i-1] || 0) + val); return acc; }, []);
+            const cumulativeNet = cumulativeIncome.map((income, i) => income - cumulativeExpense[i]);
+
+            if (cumulativeIncome.every(v => v === 0) && cumulativeExpense.every(v => v === 0)) {
+                ctx.canvas.parentNode.innerHTML = '<p class="text-center text-gray-500 py-16">No transactions recorded this month.</p>';
+                return;
+            }
+
+            currentMonthTrendChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [
+                        { label: 'Cumulative Income', data: cumulativeIncome, borderColor: '#10b981', tension: 0.2, pointRadius: 2 },
+                        { label: 'Cumulative Expense', data: cumulativeExpense, borderColor: '#f87171', tension: 0.2, pointRadius: 2 },
+                        { label: 'Cumulative Net', data: cumulativeNet, borderColor: '#3b82f6', tension: 0.2, borderDash: [5, 5], pointRadius: 2 }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    animation: {
+                        duration: 1200,
+                        easing: 'easeOutCubic',
+                    },
+                    interaction: { intersect: false, mode: 'index' },
+                    scales: {
+                        x: { grid: { display: false }, title: { display: true, text: 'Day of Month' } },
+                        y: { beginAtZero: true, title: { display: true, text: 'Amount (KSh)' } }
+                    },
+                    plugins: {
+                        legend: { position: 'top', labels: { boxWidth: 10, font: { size: 10 } } },
+                        tooltip: {
+                            callbacks: {
+                                label: (c) => ` ${c.dataset.label}: KSh ${c.parsed.y.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`
+                            }
+                        }
+                    }
+                }
+            });
         }
 
         /**
@@ -1893,6 +1995,10 @@
                 },
                 options: {
                     responsive: true, maintainAspectRatio: false,
+                    animation: {
+                        duration: 1500,
+                        easing: 'easeOutExpo',
+                    },
                     scales: { x: { grid: { display: false } }, y: { title: { display: true, text: 'Net Profit (KSh)' } } },
                     plugins: { legend: { position: 'top' }, tooltip: { mode: 'index', intersect: false } }
                 }
@@ -2084,6 +2190,10 @@
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
+                    animation: {
+                        duration: 1000,
+                        easing: 'easeOutQuart',
+                    },
                     scales: { x: { grid: { display: false } }, y: { beginAtZero: true } },
                     plugins: { legend: { position: 'top' } }
                 }
@@ -2154,6 +2264,10 @@
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
+                    animation: {
+                        duration: 1200,
+                        easing: 'easeOutCubic',
+                    },
                     interaction: { 
                         mode: 'index', 
                         intersect: false 
@@ -2300,6 +2414,10 @@
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
+                    animation: {
+                        duration: 800,
+                        easing: 'easeOutBounce',
+                    },
                     plugins: {
                         legend: { position: 'bottom', labels: { boxWidth: 12, font: { size: 12 } } },
                         tooltip: { callbacks: { label: (c) => ` ${c.label}: ${c.parsed.toLocaleString()} tasks` } }
@@ -2548,32 +2666,55 @@
                     <!-- Financial Analytics -->
                     <section>
                         <h3 class="text-xl font-bold mb-5 pb-3 border-b text-gray-800">Financial Analytics</h3>
-                        <div class="bg-card-bg p-6 rounded-2xl shadow-lg border border-gray-200/80">
-                            <div class="bg-gray-50/80 p-4 rounded-xl border border-gray-200/90 mb-6">
-                                <h4 class="font-semibold text-gray-700 mb-3 border-b pb-2">Profitability Trend (Last 12 Months)</h4>
-                                <div class="h-80">
-                                    <canvas id="monthly-chart"></canvas>
+                        <div class="bg-card-bg p-6 rounded-2xl shadow-lg border border-gray-200/80 mb-8">
+                            <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-6">
+                                <div class="bg-gray-50/80 p-4 rounded-xl border border-gray-200/90">
+                                    <div class="flex justify-between items-center mb-3 border-b pb-2">
+                                        <h4 class="font-semibold text-gray-700">Profitability Trend (Last 12 Months)</h4>
+                                        <button onclick="exportChartAsImage(monthlyChart, 'profitability-trend.png')" class="px-2 py-1 text-xs font-medium bg-white text-gray-600 rounded-md hover:bg-gray-100 transition shadow-sm border border-gray-300">Export PNG</button>
+                                    </div>
+                                    <div class="h-80">
+                                        <canvas id="monthly-chart"></canvas>
+                                    </div>
+                                </div>
+                                <div class="bg-gray-50/80 p-4 rounded-xl border border-gray-200/90">
+                                    <div class="flex justify-between items-center mb-3 border-b pb-2">
+                                        <h4 class="font-semibold text-gray-700">Daily Profitability (Current Month)</h4>
+                                        <button onclick="exportChartAsImage(currentMonthTrendChart, 'daily-profitability.png')" class="px-2 py-1 text-xs font-medium bg-white text-gray-600 rounded-md hover:bg-gray-100 transition shadow-sm border border-gray-300">Export PNG</button>
+                                    </div>
+                                    <div class="h-80">
+                                        <canvas id="current-month-trend-chart"></canvas>
+                                    </div>
                                 </div>
                             </div>
-                            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
                                 <div class="bg-gray-50/80 p-4 rounded-xl border border-gray-200/90">
-                                    <h4 class="font-semibold text-gray-700 mb-3 border-b pb-2">Income Source Breakdown</h4>
+                                    <div class="flex justify-between items-center mb-3 border-b pb-2">
+                                        <h4 class="font-semibold text-gray-700">Income Source Breakdown</h4>
+                                        <button onclick="exportChartAsImage(incomeChart, 'income-breakdown.png')" class="px-2 py-1 text-xs font-medium bg-white text-gray-600 rounded-md hover:bg-gray-100 transition shadow-sm border border-gray-300">Export PNG</button>
+                                    </div>
                                     <div class="h-64">
                                         <canvas id="income-pie-chart"></canvas>
                                     </div>
                                 </div>
                                 <div class="bg-gray-50/80 p-4 rounded-xl border border-gray-200/90">
-                                    <h4 class="font-semibold text-gray-700 mb-3 border-b pb-2">Expense Breakdown by Category</h4>
+                                    <div class="flex justify-between items-center mb-3 border-b pb-2">
+                                        <h4 class="font-semibold text-gray-700">Expense Breakdown by Category</h4>
+                                        <button onclick="exportChartAsImage(expenseChart, 'expense-breakdown.png')" class="px-2 py-1 text-xs font-medium bg-white text-gray-600 rounded-md hover:bg-gray-100 transition shadow-sm border border-gray-300">Export PNG</button>
+                                    </div>
                                     <div class="h-64">
                                         <canvas id="expense-pie-chart"></canvas>
                                     </div>
                                 </div>
                             </div>
                         </div>
-
-                        <!-- Profitability Forecast -->
-                        <div class="bg-card-bg p-6 rounded-2xl shadow-lg border border-gray-200/80 mt-12">
-                            <h3 class="text-xl font-bold mb-5 pb-3 border-b text-gray-800">Profitability Forecast (Next 6 Months)</h3>
+ 
+                         <!-- Profitability Forecast -->
+                        <div class="bg-card-bg p-6 rounded-2xl shadow-lg border border-gray-200/80">
+                            <div class="flex justify-between items-center mb-5 pb-3 border-b">
+                                <h3 class="text-xl font-bold text-gray-800">Profitability Forecast (Next 6 Months)</h3>
+                                <button onclick="exportChartAsImage(profitabilityForecastChart, 'profitability-forecast.png')" class="px-2 py-1 text-xs font-medium bg-white text-gray-600 rounded-md hover:bg-gray-100 transition shadow-sm border border-gray-300">Export PNG</button>
+                            </div>
                             <div class="h-80">
                                 <canvas id="profitability-forecast-chart"></canvas>
                             </div>
@@ -2585,13 +2726,19 @@
                         <h3 class="text-xl font-bold mb-5 pb-3 border-b text-gray-800">Livestock Analytics</h3>
                         <div class="grid grid-cols-1 xl:grid-cols-5 gap-6">
                             <div class="xl:col-span-3 bg-card-bg p-6 rounded-2xl shadow-lg border border-gray-200/80">
-                                <h4 class="font-semibold text-gray-700 mb-3 border-b pb-2">Population Growth (Last 12 Months)</h4>
+                                <div class="flex justify-between items-center mb-3 border-b pb-2">
+                                    <h4 class="font-semibold text-gray-700">Population Growth (Last 12 Months)</h4>
+                                    <button onclick="exportChartAsImage(populationGrowthChart, 'population-growth.png')" class="px-2 py-1 text-xs font-medium bg-white text-gray-600 rounded-md hover:bg-gray-100 transition shadow-sm border border-gray-300">Export PNG</button>
+                                </div>
                                 <div class="h-64">
                                     <canvas id="population-growth-chart"></canvas>
                                 </div>
                             </div>
                             <div class="xl:col-span-2 bg-card-bg p-6 rounded-2xl shadow-lg border border-gray-200/80">
-                                <h4 class="font-semibold text-gray-700 mb-3 border-b pb-2">Herd Composition</h4>
+                                <div class="flex justify-between items-center mb-3 border-b pb-2">
+                                    <h4 class="font-semibold text-gray-700">Herd Composition</h4>
+                                    <button onclick="exportChartAsImage(livestockCompositionChart, 'herd-composition.png')" class="px-2 py-1 text-xs font-medium bg-white text-gray-600 rounded-md hover:bg-gray-100 transition shadow-sm border border-gray-300">Export PNG</button>
+                                </div>
                                 <div class="h-64">
                                     <canvas id="livestock-composition-chart"></canvas>
                                 </div>
@@ -2605,26 +2752,32 @@
                         <div class="space-y-8">
                             <div class="bg-card-bg p-6 rounded-2xl shadow-lg border border-gray-200/80">
                                 <div class="flex justify-between items-center mb-4 border-b pb-3">
-                                    <h4 class="font-semibold text-gray-700">Year-Over-Year Comparison</h4>
-                                    <select id="yoy-product-select" onchange="handleProductionChartUpdate()" class="input-focus p-1 border border-gray-300 rounded-lg text-xs">
-                                        ${farmData.productionTypes.map(t => `<option value="${t}" ${t === defaultYoYType ? 'selected' : ''}>${t}</option>`).join('')}
-                                    </select>
+                                    <div class="flex items-center space-x-3">
+                                        <h4 class="font-semibold text-gray-700">Year-Over-Year Comparison</h4>
+                                        <select id="yoy-product-select" onchange="handleProductionChartUpdate()" class="input-focus p-1 border border-gray-300 rounded-lg text-xs">
+                                            ${farmData.productionTypes.map(t => `<option value="${t}" ${t === defaultYoYType ? 'selected' : ''}>${t}</option>`).join('')}
+                                        </select>
+                                    </div>
+                                    <button onclick="exportChartAsImage(yoyProductionChart, 'yoy-production.png')" class="px-2 py-1 text-xs font-medium bg-white text-gray-600 rounded-md hover:bg-gray-100 transition shadow-sm border border-gray-300">Export PNG</button>
                                 </div>
                                 <div class="h-64">
                                     <canvas id="yoy-production-chart"></canvas>
                                 </div>
                             </div>
                             <div class="bg-card-bg p-6 rounded-2xl shadow-lg border border-gray-200/80">
-                                 <div class="flex justify-between items-center mb-4 border-b pb-3">
-                                    <h4 class="font-semibold text-gray-700">Production Trends (Last 12 Months)</h4>
-                                    <div id="trend-product-select" class="flex items-center space-x-3">
-                                        ${farmData.productionTypes.map((type, i) => `
-                                            <label class="flex items-center text-xs">
-                                                <input type="checkbox" value="${type}" onchange="handleProductionChartUpdate()" class="h-4 w-4 rounded border-gray-300 text-primary-green focus:ring-primary-green" ${i < 2 ? 'checked' : ''}>
-                                                <span class="ml-1.5">${type.split(' ')[0]}</span>
-                                            </label>
-                                        `).join('')}
+                                <div class="flex justify-between items-center mb-4 border-b pb-3">
+                                    <div class="flex items-center space-x-3">
+                                        <h4 class="font-semibold text-gray-700">Production Trends (Last 12 Months)</h4>
+                                        <div id="trend-product-select" class="flex items-center space-x-3">
+                                            ${farmData.productionTypes.map((type, i) => `
+                                                <label class="flex items-center text-xs">
+                                                    <input type="checkbox" value="${type}" onchange="handleProductionChartUpdate()" class="h-4 w-4 rounded border-gray-300 text-primary-green focus:ring-primary-green" ${i < 2 ? 'checked' : ''}>
+                                                    <span class="ml-1.5">${type.split(' ')[0]}</span>
+                                                </label>
+                                            `).join('')}
+                                        </div>
                                     </div>
+                                    <button onclick="exportChartAsImage(productionTrendChart, 'production-trends.png')" class="px-2 py-1 text-xs font-medium bg-white text-gray-600 rounded-md hover:bg-gray-100 transition shadow-sm border border-gray-300">Export PNG</button>
                                 </div>
                                 <div class="h-64 relative">
                                     <div id="production-trend-no-data" class="absolute inset-0 flex items-center justify-center hidden">
@@ -2641,6 +2794,7 @@
             // Render all charts
             setTimeout(() => {
                 renderCharts(farmData.transactions);
+                renderCurrentMonthTrendChart(farmData.transactions);
                 renderLivestockCompositionChart(farmData.livestock);
                 renderPopulationGrowthChart(farmData.livestock);
                 handleProductionChartUpdate();
@@ -2679,55 +2833,51 @@
          */
         window.handleExportPdf = function(collectionName) {
             const { jsPDF } = window.jspdf;
-            if (!jsPDF || !window.jspdf.autoTable) {
-                alert('PDF generation library is not loaded.');
-                return;
-            }
             const doc = new jsPDF();
-
-            let title, headers, data, filename;
+            let reportTitle, headers, data, filename;
             const now = new Date().toISOString().split('T')[0];
+            const farmName = window.farmData.farmName || 'My Farm';
 
             switch (collectionName) {
                 case 'livestock':
-                    title = 'Livestock Records';
+                    reportTitle = 'Livestock Records';
                     headers = ['Type', 'Count', 'Acquisition Date', 'Notes'];
                     data = farmData.livestock.map(i => [i.type, i.count, i.date, i.notes || '']);
                     filename = `livestock-records_${now}.pdf`;
                     break;
                 case 'transactions':
                     const filteredTransactions = filterTransactions(farmData.transactions, viewFilters.finance);
-                    title = 'Financial Transactions';
+                    reportTitle = 'Financial Transactions';
                     headers = ['Date', 'Type', 'Category', 'Amount (KSh)', 'Notes'];
                     data = filteredTransactions.map(i => [i.date, i.type, i.category, i.amount.toFixed(2), i.notes || '']);
                     filename = `financial-transactions_${now}.pdf`;
                     break;
                 case 'production':
-                    title = 'Production History';
+                    reportTitle = 'Production History';
                     headers = ['Date', 'Product Type', 'Quantity', 'Notes'];
                     data = farmData.production.map(i => [i.date, i.type, i.quantity, i.notes || '']);
                     filename = `production-history_${now}.pdf`;
                     break;
                 case 'tasks':
-                    title = 'Task List';
+                    reportTitle = 'Task List';
                     headers = ['Due Date', 'Title', 'Priority', 'Status', 'Notes'];
                     data = farmData.tasks.map(i => [i.dueDate, i.title, i.priority, i.status, i.notes || '']);
                     filename = `task-list_${now}.pdf`;
                     break;
                 case 'inventory':
-                    title = 'Inventory Stock';
+                    reportTitle = 'Inventory Stock';
                     headers = ['Item Name', 'Category', 'Quantity', 'Unit', 'Stock Date', 'Notes'];
                     data = farmData.inventory.map(i => [i.name, i.category, i.quantity, i.unit, i.date, i.notes || '']);
                     filename = `inventory-stock_${now}.pdf`;
                     break;
                 case 'breeding':
-                    title = 'Breeding Records';
+                    reportTitle = 'Breeding Records';
                     headers = ['Animal ID', 'Species', 'Service Date', 'Expected Due Date', 'Status'];
                     data = farmData.breeding.map(i => [i.animalId, i.species, i.serviceDate, i.expectedDueDate, i.status]);
                     filename = `breeding-records_${now}.pdf`;
                     break;
                 case 'health':
-                    title = 'Health Records';
+                    reportTitle = 'Health Records';
                     headers = ['Date', 'Animal ID', 'Diagnosis', 'Treatment', 'Veterinarian'];
                     data = farmData.health.map(i => [i.recordDate, i.animalId, i.diagnosis, i.treatment || '', i.veterinarian || '']);
                     filename = `health-records_${now}.pdf`;
@@ -2736,16 +2886,70 @@
                     return; // Do nothing if collection is unknown
             }
 
+            const fullTitle = `${farmName} - ${reportTitle}`;
+
             doc.autoTable({
                 head: [headers],
                 body: data,
                 startY: 20,
                 didDrawPage: function(data) {
                     doc.setFontSize(18);
-                    doc.text(title, data.settings.margin.left, 15);
+                    doc.text(fullTitle, data.settings.margin.left, 15);
                 }
             });
             doc.save(filename);
+        }
+
+        /**
+         * Generates and downloads a PNG image for a given chart instance.
+         */
+        window.exportChartAsImage = function(chartInstance, filename) {
+            if (!chartInstance) {
+                alert('Chart not found or not rendered yet. Please ensure data is available for this chart.');
+                return;
+            }
+            // Use a white background for the exported image for better visibility
+            const image = chartInstance.toBase64Image('image/png', 1);
+            const link = document.createElement('a');
+            link.href = image;
+            link.download = filename || 'chart.png';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+        
+        /**
+         * Converts an array of objects to a CSV string and triggers a download.
+         */
+        window.exportToCsv = function(data, filename = 'export.csv') {
+            if (!data || data.length === 0) {
+                alert('No data available to export.');
+                return;
+            }
+
+            const headers = Object.keys(data[0]);
+            const csvRows = [headers.join(',')]; // Header row
+
+            for (const row of data) {
+                const values = headers.map(header => {
+                    let cell = row[header] === null || row[header] === undefined ? '' : String(row[header]);
+                    // Escape quotes by doubling them and wrap the cell in quotes if it contains a comma, quote, or newline
+                    if (cell.includes(',') || cell.includes('"') || cell.includes('\n')) {
+                        cell = `"${cell.replace(/"/g, '""')}"`;
+                    }
+                    return cell;
+                });
+                csvRows.push(values.join(','));
+            }
+
+            const csvString = csvRows.join('\n');
+            const blob = new Blob([csvString], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.setAttribute('download', filename);
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
         }
 
         // --- CRUD OPERATIONS (LOCAL) ---
@@ -2985,6 +3189,7 @@
             const isOwner = true; // Simplified for now. You'd check this from the session.
 
             let userManagementHtml = '';
+            let farmSettingsHtml = '';
             let passwordChangeHtml = '';
 
             if (isOwner) {
@@ -3025,6 +3230,23 @@
                     </div>
                 `;
 
+                // --- Farm Settings Section ---
+                farmSettingsHtml = `
+                    <div class="bg-card-bg p-8 rounded-2xl shadow-lg border border-gray-200/80">
+                        <h3 class="text-xl font-bold mb-5 border-b pb-3 text-gray-800">Farm Settings</h3>
+                        <form id="farm-settings-form" onsubmit="event.preventDefault(); handleUpdateFarmSettings();">
+                            <div class="mb-4">
+                                <label for="farm-name" class="block text-sm font-medium text-gray-700 mb-1">Farm Name</label>
+                                <input type="text" id="farm-name" required class="input-focus w-full p-3 border border-gray-300 rounded-lg" value="${farmData.farmName || ''}">
+                            </div>
+                            <button type="submit" class="w-full bg-primary-green text-white py-3 rounded-lg font-bold hover:bg-primary-green-dark transition shadow-md">Save Farm Settings</button>
+                            <p id="farm-settings-msg" class="text-center mt-4 text-sm font-medium"></p>
+                        </form>
+                    </div>
+                `;
+
+
+
                 // --- Password Change Section ---
                 passwordChangeHtml = `
                     <div class="bg-card-bg p-8 rounded-2xl shadow-lg border border-gray-200/80">
@@ -3059,11 +3281,37 @@
             container.innerHTML = `
                 <h2 class="text-2xl md:text-3xl font-bold text-gray-800 mb-8">Account Settings</h2>
                 <div class="max-w-2xl mx-auto">
-                    ${passwordChangeHtml}
-                    ${userManagementHtml}
+                    <div class="space-y-10">
+                        ${farmSettingsHtml}
+                        ${passwordChangeHtml}
+                        ${userManagementHtml}
+                    </div>
                 </div>
             `;
         }
+
+        /**
+         * Handles updating the farm settings from the Settings page.
+         */
+        window.handleUpdateFarmSettings = function() {
+            const newFarmName = document.getElementById('farm-name').value.trim();
+            const msgEl = document.getElementById('farm-settings-msg');
+
+            if (!newFarmName) {
+                msgEl.textContent = 'Farm Name cannot be empty.';
+                msgEl.className = 'text-center mt-4 text-sm font-medium text-red-500';
+                return;
+            }
+
+            farmData.farmName = newFarmName;
+            saveData();
+            msgEl.textContent = 'Farm settings updated successfully!';
+            msgEl.className = 'text-center mt-4 text-sm font-medium text-green-600';
+            // No longer need to reload the page
+            setTimeout(() => {
+                msgEl.textContent = '';
+            }, 3000);
+        };
 
         /**
          * Handles the password change request from the Settings page.
