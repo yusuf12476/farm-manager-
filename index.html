@@ -281,6 +281,26 @@
         </div>
     </div>
 
+    <!-- 4. PURCHASE Modal -->
+    <div id="purchase-modal-backdrop" class="fixed inset-0 bg-gray-900 bg-opacity-70 z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-card-bg p-6 md:p-8 rounded-2xl shadow-2xl max-w-md w-full transform transition-all duration-300 scale-95 opacity-0" id="purchase-modal-content">
+            <h3 id="purchase-modal-title" class="text-xl md:text-2xl font-bold mb-5 pb-2 border-b-2 border-primary-green/20 text-primary-green">Purchase Livestock</h3>
+            <form id="purchase-form" onsubmit="event.preventDefault(); handlePurchaseRecord();">
+                <!-- Form content is injected here dynamically by JS -->
+                <div id="purchase-form-content">
+                    <p class="text-gray-500">Loading form...</p>
+                </div>
+                
+                <p id="purchase-msg" class="text-center mt-4 text-sm font-medium hidden"></p>
+
+                <div class="flex justify-end space-x-3 mt-6 pt-4 border-t border-gray-100">
+                    <button type="button" onclick="closeModal('purchase')" class="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg font-medium hover:bg-gray-300 transition">Cancel</button>
+                    <button type="submit" class="px-6 py-2 bg-primary-green text-white rounded-lg font-bold hover:bg-primary-green-dark transition shadow-md">Confirm Purchase</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
     <!-- LOCAL DATA SCRIPT -->
     <script>
         // --- LOCAL DATA STATE ---
@@ -327,6 +347,7 @@
             livestock: [],
             transactions: [],
             production: [],
+            milkProduction: [],
             tasks: [],
             inventory: [],
             breeding: [],
@@ -336,7 +357,7 @@
             livestockTypes: ["bees", "heifers", "bulls", "duck", "geese", "fish", "goats", "sheep", "turkey", "broilers", "layers", "improved kienyeji"],
             productionTypes: ["Milk (Liters)", "Eggs (Dozens)", "Eggs (Trays)", "Honey (KGs)"],
             transactionCategories: {
-                'expense': ['Feed/Hay', 'Fertilizer/Seed', 'Equipment/Maintenance', 'Labor', 'Fuel/Utilities', 'Other Input'],
+                'expense': ['Livestock Purchase', 'Feed/Hay', 'Fertilizer/Seed', 'Equipment/Maintenance', 'Labor', 'Fuel/Utilities', 'Other Input'],
                 'income': ['Sales: Livestock', 'Sales: Cattle', 'Sales: Poultry', 'Sales: Wool/Fiber', 'Sales: Honey', 'Sales: Dairy', 'Other Income']
             },
             taskPriorities: ['High', 'Medium', 'Low'],
@@ -344,6 +365,7 @@
             inventoryCategories: ['Feed', 'Medicine', 'Fertilizer', 'Seed', 'Equipment Part', 'Fuel', 'Other Supplies'],
             animalSpecies: ['Cattle', 'Swine', 'Sheep', 'Goats', 'Poultry', 'Rabbits', 'Other'],
             breedingStatuses: ['In Calf/Farrow', 'Calved/Farrowed', 'Open/Unserved', 'Confirmed'],
+            milkingTimes: ['AM', 'PM'],
             // Average Gestation Periods in days (used for simple EDD calculation)
             gestationDays: { 'Cattle': 283, 'Swine': 114, 'Sheep': 150, 'Goats': 150, 'Poultry': 21, 'Rabbits': 31, 'Other': 283 }
         };
@@ -608,6 +630,107 @@
         }
 
         /**
+         * Renders the Milk Production Tracker view content.
+         */
+        function renderMilkProductionTracker() {
+            const records = farmData.milkProduction;
+            const uniqueAnimalIds = [...new Set(records.map(r => r.animalId))].sort();
+
+            return `
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                    <!-- Add Milk Record Form -->
+                    <div class="lg:col-span-1 bg-card-bg p-8 rounded-2xl shadow-lg border border-gray-200/80 h-fit">
+                        <h3 class="text-xl font-bold mb-5 border-b pb-3 text-gray-800">Log New Milking</h3>
+                        <form id="add-milk-form" onsubmit="event.preventDefault(); handleAddMilkRecord();" class="space-y-4">
+                            <div class="mb-4">
+                                <label for="milk-animal-id" class="block text-sm font-medium text-gray-700 mb-1">Cow ID</label>
+                                <input type="text" id="milk-animal-id" required placeholder="e.g., Daisy, #401" class="input-focus w-full p-3 border border-gray-300 rounded-lg">
+                            </div>
+                            <div class="grid grid-cols-2 gap-4 mb-4">
+                                <div>
+                                    <label for="milk-quantity" class="block text-sm font-medium text-gray-700 mb-1">Yield (Liters)</label>
+                                    <input type="number" id="milk-quantity" required min="0" step="0.1" placeholder="e.g., 12.5" class="input-focus w-full p-3 border border-gray-300 rounded-lg">
+                                </div>
+                                <div>
+                                    <label for="milk-time" class="block text-sm font-medium text-gray-700 mb-1">Milking</label>
+                                    <select id="milk-time" required class="input-focus w-full p-3 border border-gray-300 rounded-lg">
+                                        ${farmData.milkingTimes.map(t => `<option value="${t}">${t}</option>`).join('')}
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="mb-4">
+                                <label for="milk-date" class="block text-sm font-medium text-gray-700 mb-1">Date</label>
+                                <input type="date" id="milk-date" required class="input-focus w-full p-3 border border-gray-300 rounded-lg" value="${new Date().toISOString().substring(0, 10)}">
+                            </div>
+                            <button type="submit" class="w-full bg-primary-green text-white py-3 rounded-lg font-bold hover:bg-primary-green-dark transition shadow-md">Log Milk Yield</button>
+                            <div>
+                                <p id="milk-msg" class="text-center mt-3 text-sm font-medium"></p>
+                            </div>
+                        </form>
+                    </div>
+
+                    <!-- Milk Records List -->
+                    <div class="lg:col-span-2">
+                        <div class="bg-card-bg rounded-2xl shadow-lg overflow-hidden border border-gray-200/80">
+                            <div class="p-4 border-b flex justify-between items-center bg-gray-50">
+                                <h3 class="text-lg font-bold text-gray-800">Milking History</h3>
+                                <div class="flex items-center space-x-2">
+                                    <label for="milk-filter-animal" class="text-sm font-medium text-gray-700">Filter by Cow:</label>
+                                    <select id="milk-filter-animal" onchange="renderAnimalHub('milk')" class="input-focus p-1.5 border border-gray-300 rounded-lg text-sm">
+                                        <option value="all">Show All</option>
+                                        ${uniqueAnimalIds.map(id => `<option value="${id}">${id}</option>`).join('')}
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="overflow-x-auto">
+                                <table class="min-w-full divide-y divide-gray-200">
+                                    <thead class="bg-gray-50">
+                                        <tr>
+                                            <th class="px-5 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Date</th>
+                                            <th class="px-5 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Cow ID</th>
+                                            <th class="px-5 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Yield (Liters)</th>
+                                            <th class="px-5 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Time</th>
+                                            <th class="px-5 py-3 text-right">Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="milk-production-list" class="bg-white divide-y divide-gray-100">
+                                        <!-- Records will be injected here by JS -->
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderMilkProductionList() {
+            const filterValue = document.getElementById('milk-filter-animal')?.value || 'all';
+            let records = farmData.milkProduction.slice().sort((a, b) => new Date(b.date) - new Date(a.date));
+
+            if (filterValue !== 'all') {
+                records = records.filter(r => r.animalId === filterValue);
+            }
+
+            const listContainer = document.getElementById('milk-production-list');
+            if (!listContainer) return;
+
+            listContainer.innerHTML = records.length > 0 ? records.map(rec => `
+                <tr class="hover:bg-gray-50/80">
+                    <td class="px-5 py-3 text-sm">${rec.date}</td>
+                    <td class="px-5 py-3 font-semibold">${rec.animalId}</td>
+                    <td class="px-5 py-3 text-sm font-mono font-bold">${rec.quantity.toFixed(2)} L</td>
+                    <td class="px-5 py-3"><span class="px-2 py-1 text-xs rounded-full ${rec.timeOfDay === 'AM' ? 'bg-blue-100 text-blue-700' : 'bg-yellow-100 text-yellow-700'}">${rec.timeOfDay}</span></td>
+                    <td class="px-5 py-3 text-right space-x-2">
+                        <button onclick="window.confirmDelete('${rec.id}', 'milkProduction')" class="text-red-600 hover:text-red-800 p-1.5 rounded-full hover:bg-red-100" title="Delete">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                        </button>
+                    </td>
+                </tr>
+            `).join('') : `<tr><td colspan="5" class="px-5 py-10 text-center text-gray-500 italic">No milk production records found for this filter.</td></tr>`;
+        }
+
+        /**
          * Renders the main Animal Hub view with sub-tabs.
          */
         function renderAnimalHub(activeSubView = 'breeding', breedingFormState = {}) {
@@ -620,8 +743,10 @@
             let contentHtml = '';
             if (activeSubView === 'breeding') {
                 contentHtml = renderBreedingTracker(breedingFormState);
-            } else { // 'health'
+            } else if (activeSubView === 'health') {
                 contentHtml = renderHealthTracker();
+            } else if (activeSubView === 'milk') {
+                contentHtml = renderMilkProductionTracker();
             }
 
             container.innerHTML = `
@@ -636,6 +761,9 @@
                         <button onclick="renderAnimalHub('health')" class="py-3 px-2 text-lg border-b-4 ${getSubTabClass('health')}">
                             Health Tracker
                         </button>
+                        <button onclick="renderAnimalHub('milk')" class="py-3 px-2 text-lg border-b-4 ${getSubTabClass('milk')}">
+                            Milk Production
+                        </button>
                     </div>
                 </div>
 
@@ -643,6 +771,12 @@
                     ${contentHtml}
                 </div>
             `;
+
+            if (activeSubView === 'milk') {
+                // We need to render the list after the main container is in the DOM
+                // so the filter dropdown exists.
+                renderMilkProductionList();
+            }
         }
 
         window.handleBreedingFormChange = function() {
@@ -679,6 +813,38 @@
 
             msgEl.textContent = `Breeding record for ${animalId} added.`;
             msgEl.className = 'text-center mt-3 text-sm text-green-600 font-medium';
+            setTimeout(() => msgEl.textContent = '', 3000);
+        }
+
+        window.handleAddMilkRecord = async function() {
+            const animalId = document.getElementById('milk-animal-id').value.trim();
+            const quantity = parseFloat(document.getElementById('milk-quantity').value);
+            const timeOfDay = document.getElementById('milk-time').value;
+            const date = document.getElementById('milk-date').value;
+            const msgEl = document.getElementById('milk-msg');
+
+            if (!animalId || isNaN(quantity) || quantity < 0 || !timeOfDay || !date) {
+                msgEl.textContent = 'Please fill all fields correctly.';
+                msgEl.className = 'text-center mt-3 text-sm text-red-500 font-medium';
+                return;
+            }
+
+            const record = {
+                id: Date.now().toString(),
+                animalId,
+                quantity,
+                timeOfDay,
+                date
+            };
+
+            farmData.milkProduction.push(record);
+            saveData();
+            renderAnimalHub('milk'); // Re-render the whole view to update filter options
+
+            msgEl.textContent = `Yield for ${animalId} added.`;
+            msgEl.className = 'text-center mt-3 text-sm text-green-600 font-medium';
+            document.getElementById('add-milk-form').reset();
+            document.getElementById('milk-date').value = new Date().toISOString().substring(0, 10);
             setTimeout(() => msgEl.textContent = '', 3000);
         }
 
@@ -1438,6 +1604,9 @@
                                                 <td class="px-5 py-3 text-sm text-gray-500 max-w-xs truncate">${item.notes || 'N/A'}</td>
                                                 <td class="px-5 py-3 whitespace-nowrap text-right text-sm font-medium space-x-2">
                                                     ${item.count > 0 ? `
+                                                    <button onclick="window.openPurchaseModal('${item.id}')" class="text-primary-green hover:text-primary-green-dark transition p-1.5 rounded-full hover:bg-green-100" title="Purchase More">
+                                                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+                                                    </button>
                                                     <button onclick="window.openSellModal('${item.id}')" class="text-secondary-yellow hover:text-amber-600 transition p-1.5 rounded-full hover:bg-yellow-100" title="Sell">
                                                         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H4a3 3 0 00-3 3v8a3 3 0 003 3z"></path></svg>
                                                     </button>
@@ -3408,7 +3577,7 @@
             saveData();
             
             // Special handling for animal hub sub-views
-            if (collectionName === 'breeding' || collectionName === 'health') {
+            if (collectionName === 'breeding' || collectionName === 'health' || collectionName === 'milkProduction') {
                 renderAnimalHub(collectionName);
             } else if (collectionName !== 'equipment') { // Equipment re-renders its own view
                 window.changeView(collectionName); // Re-render the current view to show deletion
@@ -3499,6 +3668,69 @@
             closeModal('sell');
         }
 
+        /**
+         * Opens the modal to purchase more of an animal/group.
+         */
+        window.openPurchaseModal = function(id) {
+            const record = getRecordById(id, 'livestock');
+            if (!record) return;
+
+            const modal = document.getElementById('purchase-modal-backdrop');
+            const modalContent = document.getElementById('purchase-modal-content');
+            const formContent = document.getElementById('purchase-form-content');
+            const title = document.getElementById('purchase-modal-title');
+
+            title.textContent = `Purchase More ${record.type.charAt(0).toUpperCase() + record.type.slice(1)}`;
+
+            formContent.innerHTML = `
+                <p class="mb-4 text-gray-600">Current count for this record: <strong class="text-gray-800">${record.count}</strong></p>
+                <div class="mb-4">
+                    <label for="purchase-quantity" class="block text-sm font-medium text-gray-700 mb-1">Quantity to Purchase</label>
+                    <input type="number" id="purchase-quantity" name="purchase-quantity" required min="1" value="1"
+                           class="input-focus w-full p-3 border border-gray-300 rounded-lg">
+                </div>
+                <div class="mb-4">
+                    <label for="purchase-amount" class="block text-sm font-medium text-gray-700 mb-1">Total Purchase Cost (KSh)</label>
+                    <input type="number" id="purchase-amount" name="purchase-amount" required min="0" step="0.01" placeholder="e.g., 15000.00"
+                           class="input-focus w-full p-3 border border-gray-300 rounded-lg">
+                </div>
+                <div class="mb-4">
+                    <label for="purchase-date" class="block text-sm font-medium text-gray-700 mb-1">Purchase Date</label>
+                    <input type="date" id="purchase-date" name="purchase-date" required 
+                           class="input-focus w-full p-3 border border-gray-300 rounded-lg" value="${new Date().toISOString().substring(0, 10)}">
+                </div>
+                <input type="hidden" id="purchase-record-id" value="${record.id}">
+            `;
+
+            document.getElementById('purchase-msg').textContent = '';
+            document.getElementById('purchase-msg').classList.add('hidden');
+
+            modal.classList.remove('hidden');
+            setTimeout(() => {
+                modalContent.classList.remove('scale-95', 'opacity-0');
+                modalContent.classList.add('scale-100', 'opacity-100');
+            }, 10);
+        }
+
+        /**
+         * Handles the purchase logic: updates livestock count and adds a financial transaction.
+         */
+        window.handlePurchaseRecord = async function() {
+            const id = document.getElementById('purchase-record-id').value;
+            const quantity = parseInt(document.getElementById('purchase-quantity').value);
+            const amount = parseFloat(document.getElementById('purchase-amount').value);
+            const date = document.getElementById('purchase-date').value;
+            const record = getRecordById(id, 'livestock');
+
+            record.count += quantity;
+
+            const transaction = { id: Date.now().toString(), type: 'expense', category: 'Livestock Purchase', amount: amount, date: date, notes: `Purchase of ${quantity} ${record.type}` };
+            farmData.transactions.push(transaction);
+
+            saveData();
+            renderLivestock(farmData.livestock);
+            closeModal('purchase');
+        }
 
         // --- EDIT MODAL HANDLERS (NEW) ---
 
@@ -3860,7 +4092,7 @@
 
         /**
          * Closes a specific modal.
-         * @param {string} modalType - 'delete', 'edit', or 'sell'.
+         * @param {string} modalType - 'delete', 'edit', 'sell', or 'purchase'.
          */
         window.closeModal = function(modalType) {
             const modalBackdrop = document.getElementById(`${modalType}-modal-backdrop`);
