@@ -261,6 +261,26 @@
         </div>
     </div>
 
+    <!-- 3. SELL Modal -->
+    <div id="sell-modal-backdrop" class="fixed inset-0 bg-gray-900 bg-opacity-70 z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-card-bg p-6 md:p-8 rounded-2xl shadow-2xl max-w-md w-full transform transition-all duration-300 scale-95 opacity-0" id="sell-modal-content">
+            <h3 id="sell-modal-title" class="text-xl md:text-2xl font-bold mb-5 pb-2 border-b-2 border-primary-green/20 text-primary-green">Sell Livestock</h3>
+            <form id="sell-form" onsubmit="event.preventDefault(); handleSellRecord();">
+                <!-- Form content is injected here dynamically by JS -->
+                <div id="sell-form-content">
+                    <p class="text-gray-500">Loading form...</p>
+                </div>
+                
+                <p id="sell-msg" class="text-center mt-4 text-sm font-medium hidden"></p>
+
+                <div class="flex justify-end space-x-3 mt-6 pt-4 border-t border-gray-100">
+                    <button type="button" onclick="closeModal('sell')" class="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg font-medium hover:bg-gray-300 transition">Cancel</button>
+                    <button type="submit" class="px-6 py-2 bg-secondary-yellow text-white rounded-lg font-bold hover:bg-amber-600 transition shadow-md">Confirm Sale</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
     <!-- LOCAL DATA SCRIPT -->
     <script>
         // --- LOCAL DATA STATE ---
@@ -313,8 +333,8 @@
             health: [],
             equipment: [],
             // Available options for the UI
-            livestockTypes: ["bees", "heifers", "bulls", "chicken", "duck", "geese", "fish", "goats", "sheep", "turkey"],
-            productionTypes: ["Milk (Liters)", "Eggs (Dozens)", "Honey (KGs)"],
+            livestockTypes: ["bees", "heifers", "bulls", "duck", "geese", "fish", "goats", "sheep", "turkey", "broilers", "layers", "improved kienyeji"],
+            productionTypes: ["Milk (Liters)", "Eggs (Dozens)", "Eggs (Trays)", "Honey (KGs)"],
             transactionCategories: {
                 'expense': ['Feed/Hay', 'Fertilizer/Seed', 'Equipment/Maintenance', 'Labor', 'Fuel/Utilities', 'Other Input'],
                 'income': ['Sales: Livestock', 'Sales: Cattle', 'Sales: Poultry', 'Sales: Wool/Fiber', 'Sales: Honey', 'Sales: Dairy', 'Other Income']
@@ -322,10 +342,10 @@
             taskPriorities: ['High', 'Medium', 'Low'],
             taskStatuses: ['To Do', 'In Progress', 'Done'],
             inventoryCategories: ['Feed', 'Medicine', 'Fertilizer', 'Seed', 'Equipment Part', 'Fuel', 'Other Supplies'],
-            animalSpecies: ['Cattle', 'Swine', 'Sheep', 'Goats', 'Poultry', 'Other'],
+            animalSpecies: ['Cattle', 'Swine', 'Sheep', 'Goats', 'Poultry', 'Rabbits', 'Other'],
             breedingStatuses: ['In Calf/Farrow', 'Calved/Farrowed', 'Open/Unserved', 'Confirmed'],
             // Average Gestation Periods in days (used for simple EDD calculation)
-            gestationDays: { 'Cattle': 283, 'Swine': 114, 'Sheep': 150, 'Goats': 150, 'Poultry': 21, 'Other': 283 }
+            gestationDays: { 'Cattle': 283, 'Swine': 114, 'Sheep': 150, 'Goats': 150, 'Poultry': 21, 'Rabbits': 31, 'Other': 283 }
         };
 
         /**
@@ -460,7 +480,7 @@
                         <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
                             <input type="text" id="breeding-animal-id" required placeholder="Animal ID (e.g., Cow #102)" class="input-focus w-full p-3 border border-gray-300 rounded-lg">
                             <select id="breeding-species" required class="input-focus w-full p-3 border border-gray-300 rounded-lg" onchange="handleBreedingFormChange()">
-                                ${farmData.animalSpecies.map(s => `<option value="${s}" ${s === species ? 'selected' : ''}>${s}</option>`).join('')}
+                                ${window.farmData.animalSpecies.map(s => `<option value="${s}" ${s === species ? 'selected' : ''}>${s}</option>`).join('')}
                             </select>
                             <input type="date" id="breeding-service-date" required class="input-focus w-full p-3 border border-gray-300 rounded-lg" value="${serviceDate}" onchange="handleBreedingFormChange()">
                             <button type="submit" class="w-full bg-primary-green text-white py-3 rounded-lg font-bold hover:bg-primary-green-dark transition shadow-md">Log Service</button>
@@ -1352,7 +1372,7 @@
          * Renders the Livestock Management view. (Unchanged)
          */
         function renderLivestock(livestock) {
-            const container = document.getElementById('view-livestock');
+             const container = document.getElementById('view-livestock');
             const sortedLivestock = livestock.slice().sort((a, b) => a.type.localeCompare(b.type)); // Sort by type
             
             container.innerHTML = `
@@ -1409,14 +1429,19 @@
                                             <th class="px-5 py-3 text-right">Actions</th>
                                         </tr>
                                     </thead>
-                                    <tbody class="bg-white divide-y divide-gray-100">
+                                    <tbody class="bg-white divide-y divide-gray-200">
                                         ${sortedLivestock.length > 0 ? sortedLivestock.map(item => `
-                                            <tr class="hover:bg-gray-50/80 transition duration-150">
+                                            <tr class="hover:bg-gray-50/80 transition duration-150 ${item.count === 0 ? 'bg-gray-100 opacity-60' : ''}">
                                                 <td class="px-5 py-3 whitespace-nowrap text-sm font-semibold text-gray-800">${item.type.charAt(0).toUpperCase() + item.type.slice(1)}</td>
-                                                <td class="px-5 py-3 whitespace-nowrap text-sm text-gray-700 font-mono">${item.count.toLocaleString()}</td>
+                                                <td class="px-5 py-3 whitespace-nowrap text-sm text-gray-700 font-mono font-bold">${item.count.toLocaleString()}</td>
                                                 <td class="px-5 py-3 whitespace-nowrap text-sm text-gray-600">${item.date}</td>
                                                 <td class="px-5 py-3 text-sm text-gray-500 max-w-xs truncate">${item.notes || 'N/A'}</td>
                                                 <td class="px-5 py-3 whitespace-nowrap text-right text-sm font-medium space-x-2">
+                                                    ${item.count > 0 ? `
+                                                    <button onclick="window.openSellModal('${item.id}')" class="text-secondary-yellow hover:text-amber-600 transition p-1.5 rounded-full hover:bg-yellow-100" title="Sell">
+                                                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H4a3 3 0 00-3 3v8a3 3 0 003 3z"></path></svg>
+                                                    </button>
+                                                    ` : ''}
                                                     <button onclick="window.openEditModal('${item.id}', 'livestock')" class="text-blue-600 hover:text-blue-800 transition p-1.5 rounded-full hover:bg-blue-100" title="Edit">
                                                         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-7-3l-4 4V14h3l4-4M16 5l3 3m-8 10h.01"></path></svg>
                                                     </button>
@@ -3392,6 +3417,88 @@
             }
         }
 
+        // --- SELL MODAL HANDLERS ---
+
+        /**
+         * Opens the modal to sell an animal/group.
+         */
+        window.openSellModal = function(id) {
+            const record = getRecordById(id, 'livestock');
+            if (!record) return;
+
+            const modal = document.getElementById('sell-modal-backdrop');
+            const modalContent = document.getElementById('sell-modal-content');
+            const formContent = document.getElementById('sell-form-content');
+            const title = document.getElementById('sell-modal-title');
+
+            title.textContent = `Sell ${record.type.charAt(0).toUpperCase() + record.type.slice(1)}`;
+
+            formContent.innerHTML = `
+                <p class="mb-4 text-gray-600">Current count for this record: <strong class="text-gray-800">${record.count}</strong></p>
+                <div class="mb-4">
+                    <label for="sell-quantity" class="block text-sm font-medium text-gray-700 mb-1">Quantity to Sell</label>
+                    <input type="number" id="sell-quantity" name="sell-quantity" required min="1" max="${record.count}" value="1"
+                           class="input-focus w-full p-3 border border-gray-300 rounded-lg">
+                </div>
+                <div class="mb-4">
+                    <label for="sell-amount" class="block text-sm font-medium text-gray-700 mb-1">Total Sale Amount (KSh)</label>
+                    <input type="number" id="sell-amount" name="sell-amount" required min="0" step="0.01" placeholder="e.g., 15000.00"
+                           class="input-focus w-full p-3 border border-gray-300 rounded-lg">
+                </div>
+                <div class="mb-4">
+                    <label for="sell-date" class="block text-sm font-medium text-gray-700 mb-1">Sale Date</label>
+                    <input type="date" id="sell-date" name="sell-date" required 
+                           class="input-focus w-full p-3 border border-gray-300 rounded-lg" value="${new Date().toISOString().substring(0, 10)}">
+                </div>
+                <input type="hidden" id="sell-record-id" value="${record.id}">
+            `;
+
+            document.getElementById('sell-msg').textContent = '';
+            document.getElementById('sell-msg').classList.add('hidden');
+
+            modal.classList.remove('hidden');
+            setTimeout(() => {
+                modalContent.classList.remove('scale-95', 'opacity-0');
+                modalContent.classList.add('scale-100', 'opacity-100');
+            }, 10);
+        }
+
+        /**
+         * Handles the sale logic: updates livestock count and adds a financial transaction.
+         */
+        window.handleSellRecord = async function() {
+            const id = document.getElementById('sell-record-id').value;
+            const quantity = parseInt(document.getElementById('sell-quantity').value);
+            const amount = parseFloat(document.getElementById('sell-amount').value);
+            const date = document.getElementById('sell-date').value;
+            const msgEl = document.getElementById('sell-msg');
+
+            const record = getRecordById(id, 'livestock');
+            if (!record || isNaN(quantity) || isNaN(amount) || !date) {
+                msgEl.textContent = 'Please fill all fields correctly.';
+                msgEl.className = 'text-center mt-4 text-sm text-red-500 font-medium';
+                return;
+            }
+
+            // 1. Update livestock count
+            record.count -= quantity;
+
+            // 2. Add a corresponding income transaction
+            const transaction = {
+                id: Date.now().toString(),
+                type: 'income',
+                category: 'Sales: Livestock', // Or derive from record.type
+                amount: amount,
+                date: date,
+                notes: `Sale of ${quantity} ${record.type} (from record ID ${id})`
+            };
+            farmData.transactions.push(transaction);
+
+            saveData();
+            renderLivestock(farmData.livestock); // Re-render the livestock view
+            closeModal('sell');
+        }
+
 
         // --- EDIT MODAL HANDLERS (NEW) ---
 
@@ -3753,7 +3860,7 @@
 
         /**
          * Closes a specific modal.
-         * @param {string} modalType - 'delete' or 'edit'.
+         * @param {string} modalType - 'delete', 'edit', or 'sell'.
          */
         window.closeModal = function(modalType) {
             const modalBackdrop = document.getElementById(`${modalType}-modal-backdrop`);
