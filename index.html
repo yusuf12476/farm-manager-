@@ -132,7 +132,7 @@
         <header class="mb-8 p-4 md:p-6 bg-gradient-to-br from-white to-emerald-50/50 shadow-sm rounded-2xl border border-gray-200/80">
             <div class="flex justify-between items-center">
                 <h1 class="text-3xl md:text-4xl font-extrabold text-gray-800 flex items-center">
-                    <svg class="w-8 h-8 md:w-10 md:h-10 mr-2 md:mr-3 gradient-text" fill="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8h5z"></path></svg>
+                    <svg class="w-8 h-8 md:w-10 md:h-10 mr-2 md:mr-3 text-primary-green" fill="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8h5z"></path></svg>
                     Farm Tracker <span class="gradient-text ml-2">Pro</span>
                 </h1>
                 <div class="flex items-center space-x-2">
@@ -2526,6 +2526,39 @@
 
                     <!-- Production Analytics -->
                     <div class="lg:col-span-2 space-y-8">
+                        <div class="bg-card-bg p-6 rounded-2xl shadow-lg border border-gray-200/80">
+                            <div class="flex justify-between items-center mb-4 border-b pb-3">
+                                <div class="flex items-center space-x-3">
+                                    <h4 class="font-semibold text-gray-700">Year-Over-Year Comparison</h4>
+                                    <select id="yoy-product-select" onchange="handleProductionChartUpdate()" class="input-focus p-1 border border-gray-300 rounded-lg text-xs">
+                                        ${farmData.productionTypes.map(t => `<option value="${t}" ${t === defaultYoYType ? 'selected' : ''}>${t}</option>`).join('')}
+                                    </select>
+                                </div>
+                                <button onclick="exportChartAsImage(yoyProductionChart, 'yoy-production.png')" class="px-2 py-1 text-xs font-medium bg-white text-gray-600 rounded-md hover:bg-gray-100 transition shadow-sm border border-gray-300">Export PNG</button>
+                            </div>
+                            <div class="h-64">
+                                <canvas id="yoy-production-chart"></canvas>
+                            </div>
+                        </div>
+                        <div class="bg-card-bg p-6 rounded-2xl shadow-lg border border-gray-200/80">
+                            <div class="flex justify-between items-center mb-4 border-b pb-3">
+                                <div class="flex items-center space-x-3">
+                                    <h4 class="font-semibold text-gray-700">Production Trends (Last 12 Months)</h4>
+                                    <div id="trend-product-select" class="flex items-center space-x-3">
+                                        ${farmData.productionTypes.map((type, i) => `
+                                            <label class="flex items-center text-xs">
+                                                <input type="checkbox" value="${type}" onchange="handleProductionChartUpdate()" class="h-4 w-4 rounded border-gray-300 text-primary-green focus:ring-primary-green" ${i < 2 ? 'checked' : ''}>
+                                                <span class="ml-1.5">${type.split(' ')[0]}</span>
+                                            </label>
+                                        `).join('')}
+                                    </div>
+                                </div>
+                                <button onclick="exportChartAsImage(productionTrendChart, 'production-trends.png')" class="px-2 py-1 text-xs font-medium bg-white text-gray-600 rounded-md hover:bg-gray-100 transition shadow-sm border border-gray-300">Export PNG</button>
+                            </div>
+                            <div class="h-64 relative">
+                                <canvas id="production-trend-chart"></canvas>
+                            </div>
+                        </div>
                     </div>
                 </div>
 
@@ -2564,7 +2597,16 @@
                 </div>
             `;
 
-            // Note: Charts are now rendered in the Analytics tab
+            // Render charts after the main container is in the DOM
+            setTimeout(() => {
+                handleProductionChartUpdate();
+                // Ensure the "no data" message is hidden and canvas is visible on initial load
+                const trendChartCanvas = document.getElementById('production-trend-chart');
+                if (trendChartCanvas) {
+                    trendChartCanvas.classList.remove('hidden');
+                    trendChartCanvas.parentNode.querySelector('#production-trend-no-data')?.classList.add('hidden');
+                }
+            }, 0);
         }
 
         /**
@@ -4142,6 +4184,49 @@
             handleLogout();
         }
 
+        /**
+         * Resets the inactivity timer whenever the user interacts with the page.
+         */
+        function resetInactivityTimer() {
+            clearTimeout(inactivityTimer);
+            inactivityTimer = setTimeout(handleInactivityLogout, INACTIVITY_TIMEOUT);
+        }
+
+        /**
+         * Sets up event listeners to detect user activity.
+         */
+        function setupActivityListeners() {
+            ['mousemove', 'mousedown', 'keypress', 'scroll', 'touchstart'].forEach(event =>
+                window.addEventListener(event, resetInactivityTimer, { passive: true })
+            );
+        }
+
+        /**
+         * Hides the splash screen and reveals the main application content.
+         */
+        function showApp() {
+            const splashScreen = document.getElementById('splash-screen');
+            const appContainer = document.getElementById('app');
+
+            // Fade out splash screen
+            splashScreen.style.opacity = '0';
+            // After splash screen is gone, fade in the app
+            setTimeout(() => {
+                splashScreen.style.display = 'none';
+                appContainer.style.opacity = '1';
+
+                // Start tracking inactivity only after the app is fully visible
+                setupActivityListeners();
+                resetInactivityTimer();
+            }, 700); // Must match splash screen transition duration
+        }
+
+        // Execute initialization when the DOM is ready
+        initializeLocalApp();
+
+    </script>
+</body>
+</html>
         /**
          * Resets the inactivity timer whenever the user interacts with the page.
          */
