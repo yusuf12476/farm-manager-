@@ -3742,12 +3742,10 @@
                 renderAnimalHub(subView);
             } else if (collectionName === 'journal') {
                 renderJournal(farmData.journal);
-            } else if (collectionName === 'equipment') { // Equipment re-renders its own view
-                renderAnimalHub(collectionName);
-            } else if (collectionName !== 'equipment') { // Equipment re-renders its own view
-                window.changeView(collectionName); // Re-render the current view to show deletion
-            } else {
+            } else if (collectionName === 'equipment') {
                 renderEquipment(farmData.equipment);
+            } else {
+                window.changeView(collectionName); // Re-render the current view to show deletion
             }
         }
 
@@ -4309,49 +4307,6 @@
             handleLogout();
         }
 
-        /**
-         * Resets the inactivity timer whenever the user interacts with the page.
-         */
-        function resetInactivityTimer() {
-            clearTimeout(inactivityTimer);
-            inactivityTimer = setTimeout(handleInactivityLogout, INACTIVITY_TIMEOUT);
-        }
-
-        /**
-         * Sets up event listeners to detect user activity.
-         */
-        function setupActivityListeners() {
-            ['mousemove', 'mousedown', 'keypress', 'scroll', 'touchstart'].forEach(event =>
-                window.addEventListener(event, resetInactivityTimer, { passive: true })
-            );
-        }
-
-        /**
-         * Hides the splash screen and reveals the main application content.
-         */
-        function showApp() {
-            const splashScreen = document.getElementById('splash-screen');
-            const appContainer = document.getElementById('app');
-
-            // Fade out splash screen
-            splashScreen.style.opacity = '0';
-            // After splash screen is gone, fade in the app
-            setTimeout(() => {
-                splashScreen.style.display = 'none';
-                appContainer.style.opacity = '1';
-
-                // Start tracking inactivity only after the app is fully visible
-                setupActivityListeners();
-                resetInactivityTimer();
-            }, 700); // Must match splash screen transition duration
-        }
-
-        // Execute initialization when the DOM is ready
-        initializeLocalApp();
-
-    </script>
-</body>
-</html>
         /**
          * Resets the inactivity timer whenever the user interacts with the page.
          */
