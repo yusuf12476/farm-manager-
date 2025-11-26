@@ -95,6 +95,49 @@
             background-color: #d1d5db;
             border-radius: 2px;
         }
+
+        /* Toast Notification Container */
+        #toast-container {
+            position: fixed;
+            top: 1.25rem; /* 20px */
+            right: 1.25rem; /* 20px */
+            z-index: 9999;
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem; /* 12px */
+        }
+
+        /* Individual Toast Notification */
+        .toast {
+            width: 350px;
+            max-width: 90vw;
+            background-color: white;
+            border-radius: 0.75rem; /* 12px */
+            box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+            border-left: 4px solid var(--toast-color, #3b82f6);
+            display: flex;
+            align-items: flex-start;
+            padding: 1rem; /* 16px */
+            gap: 0.75rem; /* 12px */
+            transform: translateX(120%);
+            opacity: 0;
+            transition: all 0.4s cubic-bezier(0.21, 1.02, 0.73, 1);
+        }
+
+        .toast.show {
+            transform: translateX(0);
+            opacity: 1;
+        }
+
+        .toast-icon { flex-shrink: 0; width: 1.5rem; height: 1.5rem; }
+        .toast-content { flex-grow: 1; }
+        .toast-title { font-weight: 600; color: #1f2937; font-size: 0.875rem; }
+        .toast-message { font-size: 0.875rem; color: #4b5563; margin-top: 0.25rem; }
+        .toast-close-button {
+            flex-shrink: 0; color: #9ca3af; background: transparent;
+            border: none; cursor: pointer; padding: 0.25rem; margin: -0.25rem;
+            border-radius: 9999px; hover:bg-gray-100;
+        }
     </style>
 </head>
 <body class="min-h-screen">
@@ -124,6 +167,9 @@
             </div>
         </div>
     </div>
+
+    <!-- Toast Notification Container -->
+    <div id="toast-container"></div>
 
 
     <!-- Main App Container (Initially hidden) -->
@@ -818,6 +864,7 @@
             farmData.breeding.push(record);
             farmData.breeding.sort((a, b) => new Date(b.serviceDate) - new Date(a.serviceDate));
             saveData();
+            generateAndRenderNotifications();
             renderAnimalHub('breeding');
 
             msgEl.textContent = `Breeding record for ${animalId} added.`;
@@ -848,6 +895,7 @@
 
             farmData.milkProduction.push(record);
             saveData();
+            generateAndRenderNotifications();
             renderAnimalHub('milk'); // Re-render the whole view to update filter options
 
             msgEl.textContent = `Yield for ${animalId} added.`;
@@ -883,6 +931,7 @@
             farmData.health.push(record);
             farmData.health.sort((a, b) => new Date(b.recordDate) - new Date(a.recordDate));
             saveData();
+            generateAndRenderNotifications();
             renderAnimalHub('health');
 
             msgEl.textContent = `Health record for ${animalId} added.`;
@@ -899,6 +948,7 @@
                     renderAnimalHub('breeding');
 
                     saveData(); // Save the change
+                    generateAndRenderNotifications();
                 } catch (error) {
                     record.status = originalStatus; // Revert on failure
                     renderAnimalHub('breeding');
@@ -1015,6 +1065,7 @@
             record.maintenanceLog = []; // Initialize with empty log
             farmData.equipment.push(record);
             saveData();
+            generateAndRenderNotifications();
             renderEquipment(farmData.equipment);
 
             msgEl.textContent = `Equipment '${name}' added.`;
@@ -1047,6 +1098,7 @@
 
             equipment.maintenanceLog.push(logEntry);
             saveData();
+            generateAndRenderNotifications();
             renderEquipment(farmData.equipment);
         }
 
@@ -3316,6 +3368,7 @@
             farmData.livestock.push(record);
             farmData.livestock.sort((a, b) => new Date(b.date) - new Date(a.date));
             saveData();
+            generateAndRenderNotifications();
             renderLivestock(farmData.livestock);
 
             msgEl.textContent = `${count.toLocaleString()} ${type} added successfully!`;
@@ -3356,6 +3409,7 @@
             farmData.transactions.push(record);
             farmData.transactions.sort((a, b) => new Date(b.date) - new Date(a.date));
             saveData();
+            generateAndRenderNotifications();
             renderTransactions(farmData.transactions);
 
             msgEl.textContent = `${type.toUpperCase()} of KSh ${amount.toFixed(2).toLocaleString()} recorded successfully!`;
@@ -3393,6 +3447,7 @@
             farmData.production.push(record);
             farmData.production.sort((a, b) => new Date(b.date) - new Date(a.date));
             saveData();
+            generateAndRenderNotifications();
             renderProduction(farmData.production);
 
             const unit = type.split('(')[1].replace(')', '');
@@ -3431,6 +3486,7 @@
             record.id = Date.now().toString(); // Assign a local unique ID
             farmData.tasks.push(record);
             saveData();
+            generateAndRenderNotifications();
             renderTasks(farmData.tasks);
 
             msgEl.textContent = `Task added successfully!`;
@@ -3473,6 +3529,7 @@
             record.id = Date.now().toString(); // Assign a local unique ID
             farmData.inventory.push(record);
             saveData();
+            generateAndRenderNotifications();
             renderInventory(farmData.inventory);
 
             msgEl.textContent = `Item '${name}' added successfully!`;
@@ -3505,6 +3562,7 @@
             record.id = Date.now().toString();
             farmData.journal.push(record);
             saveData();
+            generateAndRenderNotifications();
             renderJournal(farmData.journal);
 
             msgEl.textContent = 'Journal entry saved!';
@@ -3735,6 +3793,7 @@
             
             farmData[collectionName] = farmData[collectionName].filter(item => item.id !== id);
             saveData();
+            generateAndRenderNotifications();
             
             // Special handling for animal hub sub-views
             if (collectionName === 'breeding' || collectionName === 'health' || collectionName === 'milkProduction') {
@@ -3827,6 +3886,7 @@
             farmData.transactions.push(transaction);
 
             saveData();
+            generateAndRenderNotifications();
             renderLivestock(farmData.livestock); // Re-render the livestock view
             closeModal('sell');
         }
@@ -3891,6 +3951,7 @@
             farmData.transactions.push(transaction);
 
             saveData();
+            generateAndRenderNotifications();
             renderLivestock(farmData.livestock);
             closeModal('purchase');
         }
@@ -4210,6 +4271,7 @@
                     // Update local data
                     Object.assign(record, updatedRecord);
                     saveData();
+                    generateAndRenderNotifications();
 
                     if (collectionName === 'equipment') {
                         renderEquipment(farmData.equipment);
@@ -4246,6 +4308,7 @@
                     renderTasks(farmData.tasks);
 
                     saveData();
+                    generateAndRenderNotifications();
                 } catch (error) {
                     record.status = originalStatus; // Revert on failure
                     renderTasks(farmData.tasks);
