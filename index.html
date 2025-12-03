@@ -3888,6 +3888,7 @@
             saveData();
             generateAndRenderNotifications();
             renderLivestock(farmData.livestock); // Re-render the livestock view
+            renderDashboard(farmData.livestock, farmData.transactions, farmData.production, farmData.tasks, farmData.inventory);
             closeModal('sell');
         }
 
@@ -3953,6 +3954,7 @@
             saveData();
             generateAndRenderNotifications();
             renderLivestock(farmData.livestock);
+            renderDashboard(farmData.livestock, farmData.transactions, farmData.production, farmData.tasks, farmData.inventory);
             closeModal('purchase');
         }
 
