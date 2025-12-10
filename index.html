@@ -3205,7 +3205,7 @@
          * Generates and downloads a PDF for a given table.
          */
         window.handleExportPdf = function(collectionName) {
-            const { jsPDF } = window.jspdf;
+            const jsPDF = window.jspdf.jsPDF; // Access jsPDF constructor directly
             const doc = new jsPDF();
             let reportTitle, headers, data, filename;
             const now = new Date().toISOString().split('T')[0];
