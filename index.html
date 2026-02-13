@@ -1162,8 +1162,26 @@
             const storedData = localStorage.getItem('farmData');
             if (storedData) {
                 const parsedData = JSON.parse(storedData);
-                // Merge with defaults to ensure new properties are not missed
+                
+                // Capture the fresh configuration from the current code before merging
+                const freshConfig = { ...window.farmData };
+
+                // Merge stored data to retrieve user records
                 window.farmData = { ...window.farmData, ...parsedData };
+
+                // Restore configuration lists from the fresh code to ensure updates apply
+                // This prevents old configuration in localStorage from hiding new features
+                const configKeys = [
+                    'livestockTypes', 'productionTypes', 'transactionCategories', 
+                    'taskPriorities', 'taskStatuses', 'inventoryCategories', 
+                    'animalSpecies', 'breedingStatuses', 'milkingTimes', 'gestationDays'
+                ];
+
+                configKeys.forEach(key => {
+                    if (freshConfig[key]) {
+                        window.farmData[key] = freshConfig[key];
+                    }
+                });
             } else {
                 // If no data, save the initial empty structure
                 saveData();
