@@ -2425,9 +2425,10 @@
             productionData
                 .filter(p => p.type === selectedType)
                 .forEach(p => {
-                    const recordDate = new Date(p.date);
-                    const year = recordDate.getFullYear();
-                    const month = recordDate.getMonth(); // 0-11
+                    // Parse date string manually to avoid timezone issues
+                    const [pYear, pMonth] = p.date.split('-').map(Number);
+                    const year = pYear;
+                    const month = pMonth - 1; // 0-11 for array index
 
                     if (year === currentYear) {
                         currentYearData[month] += parseFloat(p.quantity);
@@ -2495,18 +2496,23 @@
                 selectedTypes.forEach(type => monthlyData[key][type] = 0);
             }
 
-            const twelveMonthsAgo = new Date(today.getFullYear(), today.getMonth() - 11, 1);
             productionData
-                .filter(p => new Date(p.date) >= twelveMonthsAgo && selectedTypes.includes(p.type))
+                .filter(p => selectedTypes.includes(p.type))
                 .forEach(p => {
-                    const tDate = new Date(p.date);
-                    const key = `${tDate.getFullYear()}-${String(tDate.getMonth() + 1).padStart(2, '0')}`;
+                    // Parse date string manually to avoid timezone issues (YYYY-MM-DD)
+                    const [year, month] = p.date.split('-').map(Number);
+                    const key = `${year}-${String(month).padStart(2, '0')}`;
+                    
                     if (monthlyData[key]) {
                         monthlyData[key][p.type] += parseFloat(p.quantity);
                     }
                 });
 
-            const sortedMonthlyData = Object.values(monthlyData).sort((a, b) => new Date(a.label) - new Date(b.label));
+            // Sort by key (YYYY-MM) to ensure chronological order
+            const sortedMonthlyData = Object.keys(monthlyData)
+                .sort()
+                .map(key => monthlyData[key]);
+            
             const labels = sortedMonthlyData.map(d => d.label);
 
             const datasets = selectedTypes.map((type, i) => ({
@@ -2530,6 +2536,11 @@
                 parent.querySelector('#production-trend-no-data')?.classList.remove('hidden');
                 ctx.canvas.classList.add('hidden');
                 return;
+            } else {
+                // Ensure canvas is visible if we have data
+                const parent = ctx.canvas.parentNode;
+                parent.querySelector('#production-trend-no-data')?.classList.add('hidden');
+                ctx.canvas.classList.remove('hidden');
             }
 
             productionTrendChart = new Chart(ctx, {
