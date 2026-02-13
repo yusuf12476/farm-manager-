@@ -1580,8 +1580,8 @@
             }
 
             livestockData.forEach(item => {
-                const acqDate = new Date(item.date);
-                const key = `${acqDate.getFullYear()}-${String(acqDate.getMonth() + 1).padStart(2, '0')}`;
+                const [year, month] = item.date.split('-').map(Number);
+                const key = `${year}-${String(month).padStart(2, '0')}`;
                 if (monthlyData[key]) {
                     monthlyData[key].acquired += item.count;
                 }
@@ -2016,13 +2016,9 @@
                 monthlyData[key] = { label, income: 0, expense: 0, net: 0 };
             }
 
-            // Filter transactions that fall within the 6 month window
-            const twelveMonthsAgo = new Date(today.getFullYear(), today.getMonth() - 11, 1);
-            const recentTransactions = transactions.filter(t => new Date(t.date) >= twelveMonthsAgo);
-            
-            recentTransactions.forEach(t => {
-                const tDate = new Date(t.date);
-                const key = `${tDate.getFullYear()}-${String(tDate.getMonth() + 1).padStart(2, '0')}`;
+            transactions.forEach(t => {
+                const [year, month] = t.date.split('-').map(Number);
+                const key = `${year}-${String(month).padStart(2, '0')}`;
 
                 if (monthlyData[key]) {
                     const amount = parseFloat(t.amount);
@@ -2035,15 +2031,11 @@
             });
 
             // Calculate net and sort chronologically
-            const sortedMonthlyData = Object.values(monthlyData)
-                .map(item => ({ ...item, net: item.income - item.expense }))
-                .sort((a, b) => {
-                    // Simple chronological sort based on label for accurate display
-                    const monthYearA = a.label.split(' ');
-                    const monthYearB = b.label.split(' ');
-                    const dateA = new Date(`${monthYearA[0]} 1, ${monthYearA[1]}`);
-                    const dateB = new Date(`${monthYearB[0]} 1, ${monthYearB[1]}`);
-                    return dateA - dateB;
+            const sortedMonthlyData = Object.keys(monthlyData)
+                .sort()
+                .map(key => {
+                    const item = monthlyData[key];
+                    return { ...item, net: item.income - item.expense };
                 });
 
             const monthlyLabels = sortedMonthlyData.map(d => d.label);
@@ -2142,19 +2134,17 @@
             const dailyIncome = Array(daysInMonth).fill(0);
             const dailyExpense = Array(daysInMonth).fill(0);
 
-            transactions
-                .filter(t => {
-                    const tDate = new Date(t.date);
-                    return tDate.getFullYear() === currentYear && tDate.getMonth() === currentMonth;
-                })
-                .forEach(t => {
-                    const dayOfMonth = new Date(t.date).getDate() - 1; // 0-indexed
+            transactions.forEach(t => {
+                const [year, month, day] = t.date.split('-').map(Number);
+                if (year === currentYear && month === currentMonth + 1) {
+                    const dayOfMonth = day - 1; // 0-indexed
                     if (t.type === 'income') {
                         dailyIncome[dayOfMonth] += parseFloat(t.amount);
                     } else {
                         dailyExpense[dayOfMonth] += parseFloat(t.amount);
                     }
-                });
+                }
+            });
 
             // Calculate cumulative values
             const cumulativeIncome = dailyIncome.reduce((acc, val, i) => { acc.push((acc[i-1] || 0) + val); return acc; }, []);
@@ -2217,10 +2207,9 @@
                 monthlyData[key] = { label: d.toLocaleString('en-US', { month: 'short', year: 'numeric' }), net: 0 };
             }
 
-            const twelveMonthsAgo = new Date(today.getFullYear(), today.getMonth() - 11, 1);
-            transactions.filter(t => new Date(t.date) >= twelveMonthsAgo).forEach(t => {
-                const tDate = new Date(t.date);
-                const key = `${tDate.getFullYear()}-${String(tDate.getMonth() + 1).padStart(2, '0')}`;
+            transactions.forEach(t => {
+                const [year, month] = t.date.split('-').map(Number);
+                const key = `${year}-${String(month).padStart(2, '0')}`;
                 if (monthlyData[key]) {
                     monthlyData[key].net += t.type === 'income' ? parseFloat(t.amount) : -parseFloat(t.amount);
                 }
