@@ -370,7 +370,6 @@
                 startDate: null,
                 endDate: null
             },
-            tasks: { isOverdue: false }
             tasks: { isOverdue: false },
             analytics: { selectedYear: null }
         };
@@ -1755,7 +1754,7 @@
                             <span class="text-xs text-gray-500 mt-0.5">${t.date} | ${t.notes || 'No detailed notes'}</span>
                         </div>
                         <div class="flex items-center space-x-3">
-                            <span class="font-bold text-sm ${colorClass} px-3 py-1.5 rounded-full min-w-[130px] text-center border font-mono">${sign}KSh ${parseFloat(t.amount).toFixed(2).toLocaleString()}</span>
+                            <span class="font-bold text-sm ${colorClass} px-3 py-1.5 rounded-full min-w-[130px] text-center border font-mono">${sign}KSh ${t.amount.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span>
                             <button onclick="window.openEditModal('${t.id}', 'transactions')" class="text-blue-600 hover:text-blue-800 transition p-1.5 rounded-full hover:bg-blue-100" title="Edit">
                                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-7-3l-4 4V14h3l4-4M16 5l3 3m-8 10h.01"></path></svg>
                             </button>
@@ -1790,15 +1789,15 @@
                 <div class="grid grid-cols-1 md:grid-cols-3 gap-6 text-center mt-4">
                     <div class="p-5 bg-green-50 rounded-lg border-l-4 border-green-500 shadow-sm">
                         <p class="text-sm text-green-700 font-medium">Total Income</p>
-                        <p class="text-2xl font-bold text-green-600 mt-1">KSh ${totalIncome.toFixed(2).toLocaleString()}</p>
+                        <p class="text-2xl font-bold text-green-600 mt-1">KSh ${totalIncome.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</p>
                     </div>
                     <div class="p-5 bg-red-50 rounded-lg border-l-4 border-red-500 shadow-sm">
                         <p class="text-sm text-red-700 font-medium">Total Expenses</p>
-                        <p class="text-2xl font-bold text-red-600 mt-1">KSh ${totalExpense.toFixed(2).toLocaleString()}</p>
+                        <p class="text-2xl font-bold text-red-600 mt-1">KSh ${totalExpense.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</p>
                     </div>
                     <div class="p-5 ${netBg} rounded-lg border-l-4 ${netBorder} shadow-sm">
                         <p class="text-sm text-gray-700 font-medium">Net Profit/Loss</p>
-                        <p class="text-2xl font-bold ${netColor} mt-1">KSh ${netProfit.toFixed(2).toLocaleString()}</p>
+                        <p class="text-2xl font-bold ${netColor} mt-1">KSh ${netProfit.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</p>
                     </div>
                 </div>
             `;
@@ -1963,8 +1962,7 @@
                                         if (label) {
                                             label += ': ';
                                         }
-                                        label += 'KSh ' + context.parsed.toFixed(2).toLocaleString();
-                                        return label;
+                                        return label + 'KSh ' + context.parsed.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
                                     }
                                 }
                             }
@@ -2018,8 +2016,7 @@
                                     label: function(context) {
                                         let label = context.label || '';
                                         if (label) { label += ': '; }
-                                        label += 'KSh ' + context.parsed.toFixed(2).toLocaleString();
-                                        return label;
+                                        return label + 'KSh ' + context.parsed.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
                                     }
                                 }
                             }
@@ -2129,8 +2126,7 @@
                                         if (label) {
                                             label += ': ';
                                         }
-                                        label += 'KSh ' + context.parsed.y.toFixed(2).toLocaleString();
-                                        return label;
+                                        return label + 'KSh ' + context.parsed.y.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
                                     }
                                 }
                             }
@@ -3700,7 +3696,7 @@
             generateAndRenderNotifications();
             renderTransactions(farmData.transactions);
 
-            msgEl.textContent = `${type.toUpperCase()} of KSh ${amount.toFixed(2).toLocaleString()} recorded successfully!`;
+            msgEl.textContent = `${type.toUpperCase()} of KSh ${amount.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})} recorded successfully!`;
             msgEl.className = 'text-center mt-3 text-sm text-green-600 font-medium';
             document.getElementById('add-transaction-form').reset();
             document.getElementById('transaction-date').value = new Date().toISOString().substring(0, 10);
@@ -3739,7 +3735,7 @@
             renderProduction(farmData.production);
 
             const unit = type.split('(')[1].replace(')', '');
-            msgEl.textContent = `${quantity.toFixed(1).toLocaleString()} ${unit} of ${type.split(' ')[0]} logged successfully!`;
+            msgEl.textContent = `${quantity.toLocaleString(undefined, {minimumFractionDigits: 1, maximumFractionDigits: 1})} ${unit} of ${type.split(' ')[0]} logged successfully!`;
             msgEl.className = 'text-center mt-3 text-sm text-green-600 font-medium';
             document.getElementById('add-production-form').reset();
             document.getElementById('production-date').value = new Date().toISOString().substring(0, 10);
