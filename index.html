@@ -2915,53 +2915,98 @@
                         </form>
                     </div>
 
-                    <!-- Inventory List Table -->
+                    <!-- Inventory Card Grid -->
                     <div class="lg:col-span-2">
                         <div class="flex justify-between items-center mb-5 pb-3 border-b">
                             <h3 class="text-xl font-bold text-gray-800">Current Stock (${sortedInventory.length})</h3>
                             <button onclick="handleExportPdf('inventory')" class="px-3 py-1.5 text-xs font-medium bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition flex items-center space-x-1"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg><span>Export PDF</span></button>
                         </div>
-                        <div class="bg-card-bg rounded-2xl shadow-lg overflow-hidden border border-gray-200/80">
-                            <div class="overflow-x-auto">
-                                <table class="min-w-full divide-y divide-gray-200">
-                                    <thead class="bg-gray-50">
-                                        <tr>
-                                            <th class="px-5 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Item Name</th>
-                                            <th class="px-5 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Category</th>
-                                            <th class="px-5 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Quantity</th>
-                                            <th class="px-5 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Stock Date</th>
-                                            <th class="px-5 py-3 text-right">Actions</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody class="bg-white divide-y divide-gray-100">
-                                        ${sortedInventory.length > 0 ? sortedInventory.map(item => `
-                                            <tr class="hover:bg-gray-50/80 transition duration-150">
-                                                <td class="px-5 py-3 whitespace-nowrap">
-                                                    <div class="text-sm font-semibold text-gray-800">${item.name}</div>
-                                                    <div class="text-xs text-gray-500">
-                                                        ${item.lowStockThreshold !== null 
-                                                            ? `<span class="font-medium text-red-600">Alert at: ${item.lowStockThreshold}</span>` 
-                                                            : 'No alert set'}
-                                                    </div>
-                                                </td>
-                                                <td class="px-5 py-3 whitespace-nowrap text-sm text-gray-600">${item.category}</td>
-                                                <td class="px-5 py-3 whitespace-nowrap text-sm text-gray-800 font-mono font-semibold">${parseFloat(item.quantity).toLocaleString()} <span class="text-gray-500 font-sans font-normal">${item.unit}</span></td>
-                                                <td class="px-5 py-3 whitespace-nowrap text-sm text-gray-600">${item.date}</td>
-                                                <td class="px-5 py-3 whitespace-nowrap text-right text-sm font-medium space-x-2">
-                                                    <button onclick="window.openEditModal('${item.id}', 'inventory')" class="text-blue-600 hover:text-blue-800 transition p-1.5 rounded-full hover:bg-blue-100" title="Edit">
-                                                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-7-3l-4 4V14h3l4-4M16 5l3 3m-8 10h.01"></path></svg>
-                                                    </button>
-                                                    <button onclick="window.confirmDelete('${item.id}', 'inventory')" class="text-red-600 hover:text-red-800 transition p-1.5 rounded-full hover:bg-red-100" title="Delete">
-                                                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
-                                                    </button>
-                                                </td>
-                                            </tr>
-                                        `).join('') : `
-                                            <tr><td colspan="5" class="px-5 py-10 text-center text-gray-500 italic">No inventory items found. Use the form on the left to add your first item.</td></tr>
-                                        `}
-                                    </tbody>
-                                </table>
-                            </div>
+                        <div class="grid grid-cols-1 xl:grid-cols-2 gap-6">
+                            ${sortedInventory.length > 0 ? sortedInventory.map(item => {
+                                const quantity = parseFloat(item.quantity);
+                                const threshold = item.lowStockThreshold ? parseFloat(item.lowStockThreshold) : null;
+                                const isLowStock = threshold !== null && quantity <= threshold;
+
+                                let stockIndicator = { percentage: 100, colorClass: 'bg-gray-400', label: 'Alert Not Set' };
+
+                                if (threshold !== null && threshold > 0) {
+                                    if (quantity <= threshold) {
+                                        stockIndicator = {
+                                            percentage: (quantity / threshold) * 33.3,
+                                            colorClass: 'bg-red-500',
+                                            label: 'Low'
+                                        };
+                                    } else if (quantity <= threshold * 2) {
+                                        stockIndicator = {
+                                            percentage: 33.3 + ((quantity - threshold) / threshold) * 33.3,
+                                            colorClass: 'bg-secondary-yellow',
+                                            label: 'Medium'
+                                        };
+                                    } else {
+                                        const maxForCalc = threshold * 3; // Cap visualization at 3x threshold
+                                        const percentageInRange = Math.min(1, (quantity - (threshold * 2)) / (maxForCalc - (threshold * 2))) * 33.4;
+                                        stockIndicator = {
+                                            percentage: 66.6 + percentageInRange,
+                                            colorClass: 'bg-primary-green',
+                                            label: 'High'
+                                        };
+                                    }
+                                }
+                                
+                                stockIndicator.percentage = Math.max(0, Math.min(100, stockIndicator.percentage));
+
+                                return `
+                                <div class="bg-card-bg p-6 rounded-2xl shadow-lg border border-gray-200/80 flex flex-col">
+                                    <div class="flex justify-between items-start border-b pb-4 mb-4">
+                                        <div>
+                                            <h4 class="text-lg font-bold text-primary-green">${item.name}</h4>
+                                            <p class="text-sm text-gray-500">${item.category}</p>
+                                        </div>
+                                        <div class="flex-shrink-0 space-x-1">
+                                            <button onclick="window.openEditModal('${item.id}', 'inventory')" class="text-blue-600 hover:text-blue-800 p-1.5 rounded-full hover:bg-blue-100" title="Edit Item">
+                                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-7-3l-4 4V14h3l4-4M16 5l3 3m-8 10h.01"></path></svg>
+                                            </button>
+                                            <button onclick="window.confirmDelete('${item.id}', 'inventory')" class="text-red-600 hover:text-red-800 p-1.5 rounded-full hover:bg-red-100" title="Delete Item">
+                                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                                            </button>
+                                        </div>
+                                    </div>
+
+                                    <div class="mb-4">
+                                        <p class="text-4xl font-extrabold text-gray-800">${quantity.toLocaleString()}<span class="text-2xl font-semibold text-gray-500 ml-2">${item.unit}</span></p>
+                                    </div>
+
+                                    <div class="mb-4">
+                                        <div class="flex justify-between items-center mb-1">
+                                            <p class="text-xs font-medium text-gray-600">Stock Level</p>
+                                            <p class="text-xs font-semibold ${stockIndicator.colorClass.replace('bg-', 'text-')}">${stockIndicator.label}</p>
+                                        </div>
+                                        <div class="w-full bg-gray-200 rounded-full h-2.5">
+                                            <div class="${stockIndicator.colorClass} h-2.5 rounded-full transition-all duration-500" style="width: ${stockIndicator.percentage}%"></div>
+                                        </div>
+                                    </div>
+
+                                    ${isLowStock ? `
+                                    <div class="flex items-center p-3 mb-4 text-sm text-red-800 rounded-lg bg-red-50 border border-red-200" role="alert">
+                                        <svg class="flex-shrink-0 inline w-4 h-4 mr-3" fill="currentColor" viewBox="0 0 20 20"><path d="M10 .5a9.5 9.5 0 1 0 9.5 9.5A9.51 9.51 0 0 0 10 .5ZM9.5 4a1.5 1.5 0 1 1 0 3 1.5 1.5 0 0 1 0-3ZM12 15H8a1 1 0 0 1 0-2h1v-3H8a1 1 0 0 1 0-2h2a1 1 0 0 1 1 1v4h1a1 1 0 0 1 0 2Z"/></svg>
+                                        <div>
+                                            <span class="font-medium">Low Stock Alert!</span> Threshold: ${threshold} ${item.unit}.
+                                        </div>
+                                    </div>
+                                    ` : ''}
+
+                                    <div class="text-xs text-gray-500 border-t pt-3 mt-auto">
+                                        <p><strong>Last Stocked:</strong> ${item.date}</p>
+                                        ${item.notes ? `<p class="mt-1 truncate" title="${item.notes}"><strong>Notes:</strong> ${item.notes}</p>` : ''}
+                                    </div>
+                                </div>
+                                `;
+                            }).join('') : `
+                                <div class="xl:col-span-2 text-center text-gray-500 italic py-10 bg-card-bg rounded-2xl shadow-lg border border-gray-200/80">
+                                    <p>Your inventory is empty.</p>
+                                    <p class="text-sm">Use the form on the left to add your first item.</p>
+                                </div>
+                            `}
                         </div>
                     </div>
                 </div>
