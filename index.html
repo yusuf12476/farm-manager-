@@ -371,11 +371,16 @@
                 endDate: null
             },
             tasks: { isOverdue: false }
+            tasks: { isOverdue: false },
+            analytics: { selectedYear: null }
         };
         let expenseChart = null;
         let monthlyChart = null;
         let currentMonthTrendChart = null;
         let incomeChart = null;
+        let yearlyMonthlyBreakdownChart = null;
+        let yearlyExpenseCategoryChart = null;
+
         let yoyProductionChart = null;
         let productionTrendChart = null;
         let livestockCompositionChart = null;
@@ -1236,6 +1241,8 @@
                  if (livestockCompositionChart) { livestockCompositionChart.destroy(); livestockCompositionChart = null; }
                  if (populationGrowthChart) { populationGrowthChart.destroy(); populationGrowthChart = null; }
                  if (taskStatusChart) { taskStatusChart.destroy(); taskStatusChart = null; }
+                 if (yearlyMonthlyBreakdownChart) { yearlyMonthlyBreakdownChart.destroy(); yearlyMonthlyBreakdownChart = null; }
+                 if (yearlyExpenseCategoryChart) { yearlyExpenseCategoryChart.destroy(); yearlyExpenseCategoryChart = null; }
                  if (profitabilityForecastChart) { profitabilityForecastChart.destroy(); profitabilityForecastChart = null; }
             }
 
@@ -3031,6 +3038,163 @@
             `;
         }
 
+        window.handleYearlyReportUpdate = function(year) {
+            viewFilters.analytics.selectedYear = year;
+            localStorage.setItem('farmViewFilters', JSON.stringify(viewFilters));
+            renderAnalytics();
+        }
+
+        function renderYearlyMonthlyBreakdownChart(transactions, year) {
+            if (yearlyMonthlyBreakdownChart) yearlyMonthlyBreakdownChart.destroy();
+            const ctx = document.getElementById('yearly-monthly-breakdown-chart')?.getContext('2d');
+            if (!ctx) return;
+
+            const monthlyIncome = Array(12).fill(0);
+            const monthlyExpense = Array(12).fill(0);
+
+            transactions.forEach(t => {
+                const month = new Date(t.date).getMonth(); // 0-11
+                if (t.type === 'income') {
+                    monthlyIncome[month] += t.amount;
+                } else {
+                    monthlyExpense[month] += t.amount;
+                }
+            });
+
+            yearlyMonthlyBreakdownChart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'],
+                    datasets: [
+                        {
+                            label: 'Income',
+                            data: monthlyIncome,
+                            backgroundColor: '#34d399', // Emerald 400
+                            borderRadius: 4,
+                        },
+                        {
+                            label: 'Expense',
+                            data: monthlyExpense,
+                            backgroundColor: '#f87171', // Red 400
+                            borderRadius: 4,
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        x: { grid: { display: false } },
+                        y: { beginAtZero: true, title: { display: true, text: 'Amount (KSh)' } }
+                    },
+                    plugins: {
+                        legend: { position: 'top' },
+                        tooltip: {
+                            callbacks: {
+                                label: (c) => ` ${c.dataset.label}: KSh ${c.parsed.y.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        function renderYearlyExpenseCategoryChart(transactions, year) {
+            if (yearlyExpenseCategoryChart) yearlyExpenseCategoryChart.destroy();
+            const ctx = document.getElementById('yearly-expense-category-chart')?.getContext('2d');
+            if (!ctx) return;
+
+            const expenses = transactions.filter(t => t.type === 'expense');
+            const expenseData = expenses.reduce((acc, t) => {
+                acc[t.category] = (acc[t.category] || 0) + t.amount;
+                return acc;
+            }, {});
+
+            const expenseLabels = Object.keys(expenseData);
+            const expenseAmounts = Object.values(expenseData);
+
+            if (expenseAmounts.length === 0) {
+                ctx.canvas.parentNode.innerHTML = `<p class="text-center text-gray-500 py-16">No expenses for ${year} to display.</p>`;
+                return;
+            }
+
+            const categoryColors = [
+                '#059669', '#f59e0b', '#3b82f6', '#ef4444', '#8b5cf6', '#14b8a6',
+                '#d946ef', '#65a30d', '#0891b2', '#f97316', '#4338ca', '#be185d'
+            ];
+
+            yearlyExpenseCategoryChart = new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: expenseLabels,
+                    datasets: [{
+                        data: expenseAmounts,
+                        backgroundColor: expenseLabels.map((_, i) => categoryColors[i % categoryColors.length]),
+                        borderColor: '#ffffff',
+                        borderWidth: 2
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'right',
+                            labels: {
+                                color: '#1f2937',
+                                font: { family: 'Inter', size: 10 },
+                                boxWidth: 12
+                            }
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: (c) => ` ${c.label}: KSh ${c.parsed.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        function renderYearlyReportContent(year) {
+            const reportContainer = document.getElementById('yearly-report-content');
+            if (!reportContainer) return;
+
+            if (!year) {
+                reportContainer.innerHTML = '<p class="text-center text-gray-500 italic py-10">No financial data available to generate a report.</p>';
+                return;
+            }
+
+            const yearlyTransactions = farmData.transactions.filter(t => t.date.startsWith(year));
+
+            if (yearlyTransactions.length === 0) {
+                reportContainer.innerHTML = `<p class="text-center text-gray-500 italic py-10">No transactions recorded for the year ${year}.</p>`;
+                return;
+            }
+
+            const totalIncome = yearlyTransactions.filter(t => t.type === 'income').reduce((sum, t) => sum + t.amount, 0);
+            const totalExpense = yearlyTransactions.filter(t => t.type === 'expense').reduce((sum, t) => sum + t.amount, 0);
+            const netProfit = totalIncome - totalExpense;
+            const netColor = netProfit >= 0 ? 'text-green-600' : 'text-red-600';
+            const netBg = netProfit >= 0 ? 'bg-green-50' : 'bg-red-50';
+            const netBorder = netProfit >= 0 ? 'border-green-500' : 'border-red-500';
+
+            reportContainer.innerHTML = `
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-6 text-center mb-8">
+                    <div class="p-5 bg-green-50 rounded-lg border-l-4 border-green-500 shadow-sm"><p class="text-sm text-green-700 font-medium">Total Income (${year})</p><p class="text-2xl font-bold text-green-600 mt-1">KSh ${totalIncome.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</p></div>
+                    <div class="p-5 bg-red-50 rounded-lg border-l-4 border-red-500 shadow-sm"><p class="text-sm text-red-700 font-medium">Total Expenses (${year})</p><p class="text-2xl font-bold text-red-600 mt-1">KSh ${totalExpense.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</p></div>
+                    <div class="p-5 ${netBg} rounded-lg border-l-4 ${netBorder} shadow-sm"><p class="text-sm text-gray-700 font-medium">Net Profit/Loss (${year})</p><p class="text-2xl font-bold ${netColor} mt-1">KSh ${netProfit.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</p></div>
+                </div>
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 mt-8">
+                    <div class="bg-gray-50/80 p-4 rounded-xl border border-gray-200/90"><h4 class="font-semibold text-gray-700 mb-3 border-b pb-2">Monthly Breakdown (${year})</h4><div class="h-80"><canvas id="yearly-monthly-breakdown-chart"></canvas></div></div>
+                    <div class="bg-gray-50/80 p-4 rounded-xl border border-gray-200/90"><h4 class="font-semibold text-gray-700 mb-3 border-b pb-2">Expense Categories (${year})</h4><div class="h-80"><canvas id="yearly-expense-category-chart"></canvas></div></div>
+                </div>
+            `;
+
+            renderYearlyMonthlyBreakdownChart(yearlyTransactions, year);
+            renderYearlyExpenseCategoryChart(yearlyTransactions, year);
+        }
+
         /**
          * Renders the new central Analytics view.
          */
@@ -3041,10 +3205,36 @@
             // Filter transactions based on the global finance filter state
             const filteredTransactions = filterTransactions(farmData.transactions, viewFilters.finance);
 
+            // Get all unique years from transactions for the yearly report dropdown
+            const yearsWithData = [...new Set(farmData.transactions.map(t => t.date.substring(0, 4)))].sort((a, b) => b - a);
+
+            // Determine the selected year for the report
+            let selectedYear = viewFilters.analytics.selectedYear;
+            if (!selectedYear && yearsWithData.length > 0) {
+                selectedYear = yearsWithData[0]; // Default to the most recent year
+                viewFilters.analytics.selectedYear = selectedYear;
+            }
+
 
             container.innerHTML = `
                 <h2 class="text-2xl md:text-3xl font-bold text-gray-800 mb-8">Farm Analytics Center</h2>
                 <div class="space-y-12">
+
+                    <!-- Yearly Financial Report -->
+                    <section>
+                        <h3 class="text-xl font-bold mb-5 pb-3 border-b text-gray-800">Yearly Financial Report</h3>
+                        <div class="bg-card-bg p-6 rounded-2xl shadow-lg border border-gray-200/80">
+                            <div class="mb-6 max-w-xs">
+                                <label for="yearly-report-year-select" class="block text-sm font-medium text-gray-700 mb-1">Select Year for Report</label>
+                                <select id="yearly-report-year-select" onchange="handleYearlyReportUpdate(this.value)" class="input-focus w-full p-2 border border-gray-300 rounded-lg text-sm">
+                                    <!-- Options populated by JS -->
+                                </select>
+                            </div>
+                            <div id="yearly-report-content">
+                                <!-- Report content is rendered here by JS -->
+                            </div>
+                        </div>
+                    </section>
 
                     <!-- Financial Analytics -->
                     <section>
@@ -3176,6 +3366,19 @@
 
             // Render all charts
             setTimeout(() => {
+                // Populate the year selector for the yearly report
+                const yearSelect = document.getElementById('yearly-report-year-select');
+                if (yearSelect) {
+                    if (yearsWithData.length > 0) {
+                        yearSelect.innerHTML = yearsWithData.map(y => `<option value="${y}" ${y === selectedYear ? 'selected' : ''}>${y}</option>`).join('');
+                    } else {
+                        yearSelect.innerHTML = '<option>No data</option>';
+                    }
+                }
+                // Render the content for the selected year
+                renderYearlyReportContent(selectedYear);
+
+                // Render the general analytics charts
                 renderCharts(filteredTransactions);
                 renderCurrentMonthTrendChart(filteredTransactions);
                 renderLivestockCompositionChart(farmData.livestock);
