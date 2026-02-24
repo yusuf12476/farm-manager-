@@ -1295,11 +1295,11 @@
                     `).join('')}</div>
                 </div>` : '';
 
-            // Calculate 30-day production summary
-            const thirtyDaysAgo = new Date();
-            thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+            // Calculate 6-month production summary
+            const sixMonthsAgo = new Date();
+            sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
 
-            const recentProduction = production.filter(p => new Date(p.date) >= thirtyDaysAgo);
+            const recentProduction = production.filter(p => new Date(p.date) >= sixMonthsAgo);
             
             // Initialize summary with all configured types to ensure snapshots (like Broilers) appear even if 0
             const productionSummary = {};
@@ -1330,7 +1330,7 @@
             let productionHtml = Object.entries(productionSummary)
                 .map(([type, data]) => `
                     <div class="p-5 bg-card-bg border-l-4 border-secondary-yellow rounded-lg shadow-sm hover:shadow-md transition-shadow duration-200 cursor-pointer" onclick="changeView('production')">
-                        <p class="text-sm text-gray-500 font-medium">${type} (Last 30 Days)</p>
+                        <p class="text-sm text-gray-500 font-medium">${type} (Last 6 Months)</p>
                         <p class="text-3xl font-bold text-gray-800 mt-1">${data.total.toLocaleString(undefined, { maximumFractionDigits: 1 })} <span class="text-xl text-secondary-yellow">${data.unit}</span></p>
                     </div>
                 `).join('');
@@ -1338,7 +1338,7 @@
             if (productionHtml === '') {
                 productionHtml = `
                     <div class="md:col-span-3 p-6 bg-yellow-50/70 rounded-xl text-center border border-yellow-200/80">
-                        <p class="text-gray-600 font-medium">No production recorded in the last 30 days.</p>
+                        <p class="text-gray-600 font-medium">No production recorded in the last 6 months.</p>
                         <p class="text-sm text-gray-500 italic">Start logging your yields in the Production tab.</p>
                     </div>
                 `;
