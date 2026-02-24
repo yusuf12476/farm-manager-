@@ -1301,13 +1301,31 @@
 
             const recentProduction = production.filter(p => new Date(p.date) >= thirtyDaysAgo);
             
-            const productionSummary = recentProduction.reduce((acc, item) => {
-                const type = item.type.split(' ')[0];
-                const unit = item.type.split('(')[1].replace(')', '');
-                acc[type] = acc[type] || { total: 0, unit: unit };
-                acc[type].total += parseFloat(item.quantity);
-                return acc;
-            }, {});
+            // Initialize summary with all configured types to ensure snapshots (like Broilers) appear even if 0
+            const productionSummary = {};
+            
+            if (window.farmData && window.farmData.productionTypes) {
+                window.farmData.productionTypes.forEach(typeStr => {
+                    const parts = typeStr.split(' (');
+                    if (parts.length >= 2) {
+                        const name = parts[0];
+                        const unit = parts[1].replace(')', '');
+                        productionSummary[name] = { total: 0, unit: unit };
+                    }
+                });
+            }
+
+            recentProduction.forEach(item => {
+                const parts = item.type.split(' (');
+                if (parts.length >= 2) {
+                    const name = parts[0];
+                    if (!productionSummary[name]) {
+                        const unit = parts[1].replace(')', '');
+                        productionSummary[name] = { total: 0, unit: unit };
+                    }
+                    productionSummary[name].total += parseFloat(item.quantity);
+                }
+            });
 
             let productionHtml = Object.entries(productionSummary)
                 .map(([type, data]) => `
