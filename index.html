@@ -196,7 +196,7 @@
                     </button>
                 </div>
             </div>
-            <p id="auth-status" class="text-sm text-gray-500 mt-2">Initializing...</p>
+            <div id="auth-status" class="text-sm text-gray-500 mt-2 flex justify-end">Initializing...</div>
         </header>
 
         <!-- Navigation Tabs -->
@@ -379,13 +379,11 @@
         let incomeChart = null;
         let yearlyMonthlyBreakdownChart = null;
         let yearlyExpenseCategoryChart = null;
-
-        let yoyProductionChart = null;
-        let productionTrendChart = null;
         let livestockCompositionChart = null;
         let populationGrowthChart = null;
         let taskStatusChart = null;
 
+        let chartInstances = {};
         let profitabilityForecastChart = null;
         // Inactivity timer state
         let inactivityTimer;
@@ -1193,7 +1191,7 @@
 
 
             isAuthReady = true;
-            document.getElementById('auth-status').innerHTML = `User ID: <span class="font-medium text-gray-700">${currentUserId}</span> | <span class="text-green-600 font-semibold">Local Mode</span>`;
+            updateUserProfileUI();
 
             renderAllViews();
             changeView('dashboard');
@@ -1235,8 +1233,6 @@
                  if (monthlyChart) { monthlyChart.destroy(); monthlyChart = null; }
                  if (currentMonthTrendChart) { currentMonthTrendChart.destroy(); currentMonthTrendChart = null; }
                  if (incomeChart) { incomeChart.destroy(); incomeChart = null; }
-                 if (yoyProductionChart) { yoyProductionChart.destroy(); yoyProductionChart = null; }
-                 if (productionTrendChart) { productionTrendChart.destroy(); productionTrendChart = null; }
                  if (livestockCompositionChart) { livestockCompositionChart.destroy(); livestockCompositionChart = null; }
                  if (populationGrowthChart) { populationGrowthChart.destroy(); populationGrowthChart = null; }
                  if (taskStatusChart) { taskStatusChart.destroy(); taskStatusChart = null; }
@@ -2419,10 +2415,12 @@
         /**
          * Renders the Year-over-Year production comparison chart.
          */
-        function renderYoYProductionChart(productionData, selectedType) {
-            if (yoyProductionChart) yoyProductionChart.destroy();
+        function renderYoYProductionChart(productionData, selectedType, canvasId) {
+            if (chartInstances[canvasId]) {
+                chartInstances[canvasId].destroy();
+            }
 
-            const ctx = document.getElementById('yoy-production-chart')?.getContext('2d');
+            const ctx = document.getElementById(canvasId)?.getContext('2d');
             if (!ctx) return;
 
             const now = new Date();
@@ -2453,7 +2451,7 @@
                 return;
             }
 
-            yoyProductionChart = new Chart(ctx, {
+            chartInstances[canvasId] = new Chart(ctx, {
                 type: 'bar',
                 data: {
                     labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'],
@@ -2488,10 +2486,12 @@
         /**
          * Renders the multi-product production trend line chart.
          */
-        function renderProductionTrendChart(productionData, selectedTypes) {
-            if (productionTrendChart) productionTrendChart.destroy();
+        function renderProductionTrendChart(productionData, selectedTypes, canvasId, noDataId) {
+            if (chartInstances[canvasId]) {
+                chartInstances[canvasId].destroy();
+            }
 
-            const ctx = document.getElementById('production-trend-chart')?.getContext('2d');
+            const ctx = document.getElementById(canvasId)?.getContext('2d');
             if (!ctx) return;
 
             const chartColors = ['#059669', '#f59e0b', '#3b82f6', '#ef4444', '#8b5cf6'];
@@ -2543,17 +2543,17 @@
             if (!hasData) {
                 // Instead of destroying the canvas, show a message in the parent.
                 const parent = ctx.canvas.parentNode;
-                parent.querySelector('#production-trend-no-data')?.classList.remove('hidden');
+                parent.querySelector(`#${noDataId}`)?.classList.remove('hidden');
                 ctx.canvas.classList.add('hidden');
                 return;
             } else {
                 // Ensure canvas is visible if we have data
                 const parent = ctx.canvas.parentNode;
-                parent.querySelector('#production-trend-no-data')?.classList.add('hidden');
+                parent.querySelector(`#${noDataId}`)?.classList.add('hidden');
                 ctx.canvas.classList.remove('hidden');
             }
 
-            productionTrendChart = new Chart(ctx, {
+            chartInstances[canvasId] = new Chart(ctx, {
                 type: 'line',
                 data: { labels, datasets },
                 options: {
@@ -2573,17 +2573,17 @@
             });
         }
 
-        window.handleProductionChartUpdate = function() {
+        window.handleProductionChartUpdate = function(yoySelectId, yoyCanvasId, trendSelectId, trendCanvasId, trendNoDataId) {
             // For YoY Chart
-            const yoySelect = document.getElementById('yoy-product-select');
+            const yoySelect = document.getElementById(yoySelectId);
             if (yoySelect) {
-                renderYoYProductionChart(farmData.production, yoySelect.value);
+                renderYoYProductionChart(farmData.production, yoySelect.value, yoyCanvasId);
             }
             // For Trend Chart
-            const trendCheckboxes = document.querySelectorAll('#trend-product-select input[type="checkbox"]:checked');
+            const trendCheckboxes = document.querySelectorAll(`#${trendSelectId} input[type="checkbox"]:checked`);
             const selectedTrendTypes = Array.from(trendCheckboxes).map(cb => cb.value);
-            renderProductionTrendChart(farmData.production, selectedTrendTypes);
-        }
+            renderProductionTrendChart(farmData.production, selectedTrendTypes, trendCanvasId, trendNoDataId);
+        };
 
         /**
          * Renders the Production Tracking view.
@@ -2631,11 +2631,11 @@
                             <div class="flex justify-between items-center mb-4 border-b pb-3">
                                 <div class="flex items-center space-x-3">
                                     <h4 class="font-semibold text-gray-700">Year-Over-Year Comparison</h4>
-                                    <select id="yoy-product-select" onchange="handleProductionChartUpdate()" class="input-focus p-1 border border-gray-300 rounded-lg text-xs">
+                                    <select id="yoy-product-select" onchange="handleProductionChartUpdate('yoy-product-select', 'yoy-production-chart', 'trend-product-select', 'production-trend-chart', 'production-trend-no-data')" class="input-focus p-1 border border-gray-300 rounded-lg text-xs">
                                         ${farmData.productionTypes.map(t => `<option value="${t}" ${t === defaultYoYType ? 'selected' : ''}>${t}</option>`).join('')}
                                     </select>
                                 </div>
-                                <button onclick="exportChartAsImage(yoyProductionChart, 'yoy-production.png')" class="px-2 py-1 text-xs font-medium bg-white text-gray-600 rounded-md hover:bg-gray-100 transition shadow-sm border border-gray-300">Export PNG</button>
+                                <button onclick="exportChartAsImage('yoy-production-chart', 'yoy-production.png')" class="px-2 py-1 text-xs font-medium bg-white text-gray-600 rounded-md hover:bg-gray-100 transition shadow-sm border border-gray-300">Export PNG</button>
                             </div>
                             <div class="h-64">
                                 <canvas id="yoy-production-chart"></canvas>
@@ -2648,13 +2648,13 @@
                                     <div id="trend-product-select" class="flex items-center space-x-3">
                                         ${farmData.productionTypes.map((type, i) => `
                                             <label class="flex items-center text-xs">
-                                                <input type="checkbox" value="${type}" onchange="handleProductionChartUpdate()" class="h-4 w-4 rounded border-gray-300 text-primary-green focus:ring-primary-green" ${i < 2 ? 'checked' : ''}>
+                                                <input type="checkbox" value="${type}" onchange="handleProductionChartUpdate('yoy-product-select', 'yoy-production-chart', 'trend-product-select', 'production-trend-chart', 'production-trend-no-data')" class="h-4 w-4 rounded border-gray-300 text-primary-green focus:ring-primary-green" ${i < 2 ? 'checked' : ''}>
                                                 <span class="ml-1.5">${type.split(' ')[0]}</span>
                                             </label>
                                         `).join('')}
                                     </div>
                                 </div>
-                                <button onclick="exportChartAsImage(productionTrendChart, 'production-trends.png')" class="px-2 py-1 text-xs font-medium bg-white text-gray-600 rounded-md hover:bg-gray-100 transition shadow-sm border border-gray-300">Export PNG</button>
+                                <button onclick="exportChartAsImage('production-trend-chart', 'production-trends.png')" class="px-2 py-1 text-xs font-medium bg-white text-gray-600 rounded-md hover:bg-gray-100 transition shadow-sm border border-gray-300">Export PNG</button>
                             </div>
                             <div class="h-64 relative">
                                 <canvas id="production-trend-chart"></canvas>
@@ -2700,12 +2700,12 @@
 
             // Render charts after the main container is in the DOM
             setTimeout(() => {
-                handleProductionChartUpdate();
+                handleProductionChartUpdate('yoy-product-select', 'yoy-production-chart', 'trend-product-select', 'production-trend-chart', 'production-trend-no-data');
                 // Ensure the "no data" message is hidden and canvas is visible on initial load
                 const trendChartCanvas = document.getElementById('production-trend-chart');
                 if (trendChartCanvas) {
                     trendChartCanvas.classList.remove('hidden');
-                    trendChartCanvas.parentNode.querySelector('#production-trend-no-data')?.classList.add('hidden');
+                    trendChartCanvas.parentNode.querySelector(`#production-trend-no-data`)?.classList.add('hidden');
                 }
             }, 0);
         }
@@ -3323,36 +3323,36 @@
                                 <div class="flex justify-between items-center mb-4 border-b pb-3">
                                     <div class="flex items-center space-x-3">
                                         <h4 class="font-semibold text-gray-700">Year-Over-Year Comparison</h4>
-                                        <select id="yoy-product-select" onchange="handleProductionChartUpdate()" class="input-focus p-1 border border-gray-300 rounded-lg text-xs">
+                                        <select id="analytics-yoy-product-select" onchange="handleProductionChartUpdate('analytics-yoy-product-select', 'analytics-yoy-production-chart', 'analytics-trend-product-select', 'analytics-production-trend-chart', 'analytics-production-trend-no-data')" class="input-focus p-1 border border-gray-300 rounded-lg text-xs">
                                             ${farmData.productionTypes.map(t => `<option value="${t}" ${t === defaultYoYType ? 'selected' : ''}>${t}</option>`).join('')}
                                         </select>
                                     </div>
-                                    <button onclick="exportChartAsImage(yoyProductionChart, 'yoy-production.png')" class="px-2 py-1 text-xs font-medium bg-white text-gray-600 rounded-md hover:bg-gray-100 transition shadow-sm border border-gray-300">Export PNG</button>
+                                    <button onclick="exportChartAsImage('analytics-yoy-production-chart', 'yoy-production.png')" class="px-2 py-1 text-xs font-medium bg-white text-gray-600 rounded-md hover:bg-gray-100 transition shadow-sm border border-gray-300">Export PNG</button>
                                 </div>
                                 <div class="h-64">
-                                    <canvas id="yoy-production-chart"></canvas>
+                                    <canvas id="analytics-yoy-production-chart"></canvas>
                                 </div>
                             </div>
                             <div class="bg-card-bg p-6 rounded-2xl shadow-lg border border-gray-200/80">
                                 <div class="flex justify-between items-center mb-4 border-b pb-3">
                                     <div class="flex items-center space-x-3">
                                         <h4 class="font-semibold text-gray-700">Production Trends (Last 12 Months)</h4>
-                                        <div id="trend-product-select" class="flex items-center space-x-3">
+                                        <div id="analytics-trend-product-select" class="flex items-center space-x-3">
                                             ${farmData.productionTypes.map((type, i) => `
                                                 <label class="flex items-center text-xs">
-                                                    <input type="checkbox" value="${type}" onchange="handleProductionChartUpdate()" class="h-4 w-4 rounded border-gray-300 text-primary-green focus:ring-primary-green" ${i < 2 ? 'checked' : ''}>
+                                                    <input type="checkbox" value="${type}" onchange="handleProductionChartUpdate('analytics-yoy-product-select', 'analytics-yoy-production-chart', 'analytics-trend-product-select', 'analytics-production-trend-chart', 'analytics-production-trend-no-data')" class="h-4 w-4 rounded border-gray-300 text-primary-green focus:ring-primary-green" ${i < 2 ? 'checked' : ''}>
                                                     <span class="ml-1.5">${type.split(' ')[0]}</span>
                                                 </label>
                                             `).join('')}
                                         </div>
                                     </div>
-                                    <button onclick="exportChartAsImage(productionTrendChart, 'production-trends.png')" class="px-2 py-1 text-xs font-medium bg-white text-gray-600 rounded-md hover:bg-gray-100 transition shadow-sm border border-gray-300">Export PNG</button>
+                                    <button onclick="exportChartAsImage('analytics-production-trend-chart', 'production-trends.png')" class="px-2 py-1 text-xs font-medium bg-white text-gray-600 rounded-md hover:bg-gray-100 transition shadow-sm border border-gray-300">Export PNG</button>
                                 </div>
                                 <div class="h-64 relative">
-                                    <div id="production-trend-no-data" class="absolute inset-0 flex items-center justify-center hidden">
+                                    <div id="analytics-production-trend-no-data" class="absolute inset-0 flex items-center justify-center hidden">
                                         <p class="text-center text-gray-500 py-16">No data for selected products in the last 12 months.</p>
                                     </div>
-                                    <canvas id="production-trend-chart"></canvas>
+                                    <canvas id="analytics-production-trend-chart"></canvas>
                                 </div>
                             </div>
                         </div>
@@ -3379,13 +3379,13 @@
                 renderCurrentMonthTrendChart(filteredTransactions);
                 renderLivestockCompositionChart(farmData.livestock);
                 renderPopulationGrowthChart(farmData.livestock);
-                handleProductionChartUpdate();
+                handleProductionChartUpdate('analytics-yoy-product-select', 'analytics-yoy-production-chart', 'analytics-trend-product-select', 'analytics-production-trend-chart', 'analytics-production-trend-no-data');
                 // Ensure the "no data" message is hidden and canvas is visible on initial load
                 renderProfitabilityForecastChart(filteredTransactions);
-                const trendChartCanvas = document.getElementById('production-trend-chart');
+                const trendChartCanvas = document.getElementById('analytics-production-trend-chart');
                 if (trendChartCanvas) {
                     trendChartCanvas.classList.remove('hidden');
-                    trendChartCanvas.parentNode.querySelector('#production-trend-no-data')?.classList.add('hidden');
+                    trendChartCanvas.parentNode.querySelector('#analytics-production-trend-no-data')?.classList.add('hidden');
                 }
                 renderTaskStatusChart(farmData.tasks);
             }, 0);
@@ -3562,7 +3562,8 @@
         /**
          * Generates and downloads a PNG image for a given chart instance.
          */
-        window.exportChartAsImage = function(chartInstance, filename) {
+        window.exportChartAsImage = function(canvasId, filename) {
+            const chartInstance = chartInstances[canvasId];
             if (!chartInstance) {
                 alert('Chart not found or not rendered yet. Please ensure data is available for this chart.');
                 return;
@@ -3877,6 +3878,54 @@
             alert("Delegate management is not supported in local storage mode.");
         }
 
+        window.previewProfileImage = function(input) {
+            if (input.files && input.files[0]) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    document.getElementById('profile-preview').src = e.target.result;
+                }
+                reader.readAsDataURL(input.files[0]);
+            }
+        }
+
+        window.handleUpdateProfile = function() {
+            const displayName = document.getElementById('display-name').value.trim();
+            const imgPreview = document.getElementById('profile-preview').src;
+            const msgEl = document.getElementById('profile-msg');
+
+            owner.displayName = displayName;
+            if (imgPreview.startsWith('data:image')) {
+                owner.profilePic = imgPreview;
+            }
+
+            localStorage.setItem('farmOwner', JSON.stringify(owner));
+            updateUserProfileUI();
+
+            msgEl.textContent = 'Profile updated successfully!';
+            msgEl.className = 'text-center mt-4 text-sm font-medium text-green-600';
+            setTimeout(() => msgEl.textContent = '', 3000);
+        }
+
+        function updateUserProfileUI() {
+            const authStatus = document.getElementById('auth-status');
+            if (!authStatus || !owner) return;
+            
+            const name = owner.displayName || owner.userId;
+            const defaultAvatar = `data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%239ca3af'%3E%3Cpath d='M24 20.993V24H0v-2.996A14.977 14.977 0 0112.004 15c4.904 0 9.26 2.354 11.996 5.993zM16.002 8.999a4 4 0 11-8 0 4 4 0 018 0z' /%3E%3C/svg%3E`;
+            const picSrc = owner.profilePic || defaultAvatar;
+            
+            authStatus.innerHTML = `
+                <div class="flex items-center justify-end">
+                    <div class="flex flex-col items-end mr-3">
+                        <span class="font-bold text-gray-800 text-sm">${name}</span>
+                        <span class="text-xs text-gray-500">ID: ${owner.userId}</span>
+                    </div>
+                    <img src="${picSrc}" class="w-10 h-10 rounded-full object-cover border-2 border-white shadow-sm bg-gray-100">
+                </div>
+            `;
+            authStatus.classList.remove('text-gray-500');
+        }
+
         /**
          * Renders the Settings page.
          */
@@ -3885,10 +3934,36 @@
             const isOwner = true; // Simplified for now. You'd check this from the session.
 
             let userManagementHtml = '';
+            let profileSettingsHtml = '';
             let farmSettingsHtml = '';
             let passwordChangeHtml = '';
 
             if (isOwner) {
+                // --- Profile Settings Section ---
+                profileSettingsHtml = `
+                    <div class="bg-card-bg p-8 rounded-2xl shadow-lg border border-gray-200/80">
+                        <h3 class="text-xl font-bold mb-5 border-b pb-3 text-gray-800">Profile Customization</h3>
+                        <form id="profile-settings-form" onsubmit="event.preventDefault(); handleUpdateProfile();">
+                            <div class="flex flex-col md:flex-row items-center md:space-x-6 mb-6 space-y-4 md:space-y-0">
+                                <div class="relative group">
+                                    <img id="profile-preview" src="${owner.profilePic || 'data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' viewBox=\'0 0 24 24\' fill=\'%23e5e7eb\'%3E%3Cpath d=\'M24 20.993V24H0v-2.996A14.977 14.977 0 0112.004 15c4.904 0 9.26 2.354 11.996 5.993zM16.002 8.999a4 4 0 11-8 0 4 4 0 018 0z\' /%3E%3C/svg%3E'}" alt="Profile Preview" class="w-24 h-24 rounded-full object-cover border-4 border-white shadow-md bg-gray-100">
+                                    <label for="profile-pic-upload" class="absolute bottom-0 right-0 bg-primary-green text-white p-2 rounded-full cursor-pointer hover:bg-primary-green-dark transition shadow-md transform group-hover:scale-110" title="Change Photo">
+                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
+                                    </label>
+                                    <input type="file" id="profile-pic-upload" accept="image/*" class="hidden" onchange="previewProfileImage(this)">
+                                </div>
+                                <div class="flex-grow w-full">
+                                    <label for="display-name" class="block text-sm font-medium text-gray-700 mb-1">Display Name</label>
+                                    <input type="text" id="display-name" placeholder="e.g. Farm Owner" class="input-focus w-full p-3 border border-gray-300 rounded-lg" value="${owner.displayName || ''}">
+                                    <p class="text-xs text-gray-500 mt-1">This name will appear in the dashboard header.</p>
+                                </div>
+                            </div>
+                            <button type="submit" class="w-full bg-primary-green text-white py-3 rounded-lg font-bold hover:bg-primary-green-dark transition shadow-md">Save Profile</button>
+                            <p id="profile-msg" class="text-center mt-4 text-sm font-medium"></p>
+                        </form>
+                    </div>
+                `;
+
                 // --- User Management Section ---
                 const delegates = owner.delegates || [];
                 const canAddMore = delegates.length < 3;
@@ -3978,6 +4053,7 @@
                 <h2 class="text-2xl md:text-3xl font-bold text-gray-800 mb-8">Account Settings</h2>
                 <div class="max-w-2xl mx-auto">
                     <div class="space-y-10">
+                        ${profileSettingsHtml}
                         ${farmSettingsHtml}
                         ${passwordChangeHtml}
                         ${userManagementHtml}
