@@ -418,6 +418,7 @@
 
         window.farmData = {
             farmName: 'My Farm',
+            animals: [], // For individual animal tracking with tags
             livestock: [],
             transactions: [],
             production: [],
@@ -429,6 +430,12 @@
             equipment: [],
             // Available options for the UI
             journal: [],
+            animalTags: {
+                'Cattle': ['Dairy', 'Beef', 'Heifer', 'Bull', 'Steer', 'In-Calf', 'Dry', 'High-Yield', 'For Culling'],
+                'Goats': ['Doe', 'Buck', 'Kid', 'Dairy', 'Meat', 'Fiber', 'In-Kid'],
+                'Sheep': ['Ewe', 'Ram', 'Lamb', 'Wool', 'Meat', 'For Slaughter', 'In-Lamb'],
+                'General': ['For Sale', 'Quarantined', 'Show Animal', 'Problem Breeder', 'Needs Vaccination']
+            },
             livestockTypes: ["bees", "heifers", "bulls", "duck", "geese", "fish", "goats", "sheep", "turkey", "broilers", "layers", "improved kienyeji"],
             productionTypes: ["Milk (Liters)", "Eggs (Trays)", "Honey (KGs)", "Broilers (Birds)"],
             transactionCategories: {
@@ -473,11 +480,30 @@
                     <input type="text" id="setup-farmname" required placeholder="Your Farm's Name" class="input-focus w-full p-3 border border-gray-300 rounded-lg mb-2">
                     <form onsubmit="event.preventDefault(); handleCreateUser();">
                         <input type="text" id="setup-userid" required placeholder="Create a User ID" class="input-focus w-full p-3 border border-gray-300 rounded-lg mb-2">
+                        <input type="email" id="setup-email" required placeholder="Recovery Email" class="input-focus w-full p-3 border border-gray-300 rounded-lg mb-2">
                         <input type="password" id="setup-password" required placeholder="Create a strong password" class="input-focus w-full p-3 border border-gray-300 rounded-lg mb-2">
                         <input type="password" id="setup-password-confirm" required placeholder="Confirm password" class="input-focus w-full p-3 border border-gray-300 rounded-lg">
                         ${errorHtml}
                         <button type="submit" class="w-full mt-4 bg-primary-green text-white py-3 rounded-lg font-bold hover:bg-primary-green-dark transition">Create Account & Start</button>
                     </form>
+                `;
+            } else if (state === 'forgot-password') {
+                html = `
+                    <h3 class="text-lg md:text-xl font-bold mb-4 text-gray-800">Recover Password</h3>
+                    <p class="text-sm text-gray-600 mb-4">Enter your recovery email to reset your password.</p>
+                    <form onsubmit="event.preventDefault(); handleRecoverPassword();">
+                        <input type="email" id="recover-email" required placeholder="Your Registered Email" class="input-focus w-full p-3 border border-gray-300 rounded-lg mb-2">
+                        <div id="recovery-new-password-fields" class="hidden space-y-2 mb-2">
+                             <input type="password" id="recover-new-password" placeholder="New Password" class="input-focus w-full p-3 border border-gray-300 rounded-lg">
+                             <input type="password" id="recover-confirm-password" placeholder="Confirm New Password" class="input-focus w-full p-3 border border-gray-300 rounded-lg">
+                        </div>
+                        ${errorHtml}
+                        <button type="submit" id="recovery-btn" class="w-full mt-4 bg-primary-green text-white py-3 rounded-lg font-bold hover:bg-primary-green-dark transition">Verify Email</button>
+                    </form>
+                    <div class="flex justify-between items-center mt-4">
+                        <button onclick="renderSecurityModal('login')" class="text-xs text-blue-500 hover:underline">Back to Login</button>
+                        <button onclick="handleResetApp()" class="text-xs text-red-500 hover:underline">Hard Reset (Clear Data)</button>
+                    </div>
                 `;
             } else { // 'login'
                 html = `
@@ -492,7 +518,7 @@
                     </form>
                     <div class="flex justify-between items-center mt-4">
                         <button onclick="renderSecurityModal('setup')" class="text-xs text-blue-500 hover:underline">Create a new account</button>
-                        <button onclick="handleResetApp()" class="text-xs text-gray-500 hover:text-red-600 hover:underline">Forgot password?</button>
+                        <button onclick="renderSecurityModal('forgot-password')" class="text-xs text-gray-500 hover:text-primary-green hover:underline">Forgot password?</button>
                     </div>
                 `;
             }
@@ -502,11 +528,17 @@
         async function handleCreateUser() {
             const farmName = document.getElementById('setup-farmname').value.trim();
             const userId = document.getElementById('setup-userid').value.trim();
+            const email = document.getElementById('setup-email').value.trim();
             const pass = document.getElementById('setup-password').value;
             const confirmPass = document.getElementById('setup-password-confirm').value;
 
             if (!farmName) {
                 renderSecurityModal('setup', 'Farm Name is required.');
+                return;
+            }
+
+            if (!email || !email.includes('@')) {
+                renderSecurityModal('setup', 'Valid recovery email is required.');
                 return;
             }
 
@@ -519,13 +551,72 @@
                 return;
             }
             
-            owner = { userId, password: pass };
+            owner = { userId, password: pass, email };
             localStorage.setItem('farmOwner', JSON.stringify(owner));
             window.farmData.farmName = farmName;
             saveData();
 
             // After successful registration, log in automatically
             await handleLogin(userId, pass);
+        }
+
+        async function handleRecoverPassword() {
+            const emailInput = document.getElementById('recover-email');
+            const email = emailInput.value.trim();
+            const fieldsContainer = document.getElementById('recovery-new-password-fields');
+            const btn = document.getElementById('recovery-btn');
+            const contentDiv = document.getElementById('security-modal-content');
+            
+            const showError = (msg) => {
+                let err = contentDiv.querySelector('.error-msg');
+                if (!err) {
+                    err = document.createElement('p');
+                    err.className = 'error-msg text-red-500 text-sm font-medium mt-3 text-center';
+                    const form = contentDiv.querySelector('form');
+                    form.insertBefore(err, btn);
+                }
+                err.textContent = msg;
+            };
+
+            if (!owner) {
+                 const ownerData = localStorage.getItem('farmOwner');
+                 if (ownerData) owner = JSON.parse(ownerData);
+            }
+
+            if (!owner || !owner.email) {
+                showError('No account found or no recovery email set. Please perform a Hard Reset.');
+                return;
+            }
+
+            if (owner.email.toLowerCase() !== email.toLowerCase()) {
+                showError('Email does not match our records.');
+                return;
+            }
+
+            if (fieldsContainer.classList.contains('hidden')) {
+                fieldsContainer.classList.remove('hidden');
+                emailInput.disabled = true;
+                btn.textContent = 'Reset Password';
+                const err = contentDiv.querySelector('.error-msg');
+                if(err) err.remove();
+                return;
+            }
+
+            const newPass = document.getElementById('recover-new-password').value;
+            const confirmPass = document.getElementById('recover-confirm-password').value;
+
+            if (newPass.length < 6) {
+                showError('New password must be at least 6 characters.');
+                return;
+            }
+            if (newPass !== confirmPass) {
+                showError('Passwords do not match.');
+                return;
+            }
+
+            owner.password = newPass;
+            localStorage.setItem('farmOwner', JSON.stringify(owner));
+            renderSecurityModal('login', 'Password reset successful! Please login.');
         }
 
         /**
@@ -570,12 +661,18 @@
             const serviceDate = formState.serviceDate || new Date().toISOString().substring(0, 10);
             const species = formState.species || farmData.animalSpecies[0];
             const newRecordDueDate = calculateDueDate(serviceDate, species);
+            
+            const availableAnimals = farmData.animals.filter(a => a.species === species);
+
             return `
                 <div class="bg-card-bg p-8 rounded-2xl shadow-lg border border-gray-200/80 mb-8">
                     <h3 class="text-xl font-bold mb-5 border-b pb-3 text-gray-800">Add New Service Record</h3>
                     <form id="add-breeding-form" onsubmit="event.preventDefault(); handleAddBreedingRecord();" class="space-y-4">
                         <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
-                            <input type="text" id="breeding-animal-id" required placeholder="Animal ID (e.g., Cow #102)" class="input-focus w-full p-3 border border-gray-300 rounded-lg">
+                            ${availableAnimals.length > 0 ? `
+                                <select id="breeding-animal-id" required class="input-focus w-full p-3 border border-gray-300 rounded-lg">${availableAnimals.map(a => `<option value="${a.animalId}">${a.animalId}</option>`).join('')}</select>
+                            ` : `<input type="text" id="breeding-animal-id" placeholder="No animals found" disabled class="input-focus w-full p-3 border border-gray-300 rounded-lg bg-gray-100">`}
+                            
                             <select id="breeding-species" required class="input-focus w-full p-3 border border-gray-300 rounded-lg" onchange="handleBreedingFormChange()">
                                 ${window.farmData.animalSpecies.map(s => `<option value="${s}" ${s === species ? 'selected' : ''}>${s}</option>`).join('')}
                             </select>
@@ -645,12 +742,15 @@
          */
         function renderHealthTracker() {
             const records = farmData.health;
+            const animals = farmData.animals;
             return `
                 <div class="bg-card-bg p-8 rounded-2xl shadow-lg border border-gray-200/80 mb-8">
                     <h3 class="text-xl font-bold mb-5 border-b pb-3 text-gray-800">Log New Health Event</h3>
                     <form id="add-health-form" onsubmit="event.preventDefault(); handleAddHealthRecord();" class="space-y-4">
                         <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-                            <input type="text" id="health-animal-id" required placeholder="Animal ID" class="input-focus w-full p-3 border border-gray-300 rounded-lg">
+                            ${animals.length > 0 ? `
+                                <select id="health-animal-id" required class="input-focus w-full p-3 border border-gray-300 rounded-lg">${animals.map(a => `<option value="${a.animalId}">${a.animalId} (${a.species})</option>`).join('')}</select>
+                            ` : `<input type="text" id="health-animal-id" placeholder="Register animals first" disabled class="input-focus w-full p-3 border border-gray-300 rounded-lg bg-gray-100">`}
                             <input type="date" id="health-record-date" required class="input-focus w-full p-3 border border-gray-300 rounded-lg" value="${new Date().toISOString().substring(0, 10)}">
                             <input type="text" id="health-vet" placeholder="Veterinarian (Optional)" class="input-focus w-full p-3 border border-gray-300 rounded-lg">
                         </div>
@@ -710,6 +810,7 @@
         function renderMilkProductionTracker() {
             const records = farmData.milkProduction;
             const uniqueAnimalIds = [...new Set(records.map(r => r.animalId))].sort();
+            const animals = farmData.animals;
 
             return `
                 <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -719,7 +820,9 @@
                         <form id="add-milk-form" onsubmit="event.preventDefault(); handleAddMilkRecord();" class="space-y-4">
                             <div class="mb-4">
                                 <label for="milk-animal-id" class="block text-sm font-medium text-gray-700 mb-1">Cow ID</label>
-                                <input type="text" id="milk-animal-id" required placeholder="e.g., Daisy, #401" class="input-focus w-full p-3 border border-gray-300 rounded-lg">
+                                ${animals.length > 0 ? `
+                                    <select id="milk-animal-id" required class="input-focus w-full p-3 border border-gray-300 rounded-lg">${animals.map(a => `<option value="${a.animalId}">${a.animalId} (${a.species})</option>`).join('')}</select>
+                                ` : `<input type="text" id="milk-animal-id" placeholder="Register animals first" disabled class="input-focus w-full p-3 border border-gray-300 rounded-lg bg-gray-100">`}
                             </div>
                             <div class="grid grid-cols-2 gap-4 mb-4">
                                 <div>
@@ -808,28 +911,33 @@
         /**
          * Renders the main Animal Hub view with sub-tabs.
          */
-        function renderAnimalHub(activeSubView = 'breeding', breedingFormState = {}) {
+        function renderAnimalHub(activeSubView = 'animals', breedingFormState = {}) {
             const container = document.getElementById('view-animalhub');
             
             const getSubTabClass = (tabName) => activeSubView === tabName 
                 ? 'border-primary-green text-primary-green font-semibold' 
                 : 'border-transparent text-gray-500 hover:text-gray-800';
 
-            let contentHtml = '';
-            if (activeSubView === 'breeding') {
-                contentHtml = renderBreedingTracker(breedingFormState);
-            } else if (activeSubView === 'health') {
-                contentHtml = renderHealthTracker();
-            } else if (activeSubView === 'milk') {
-                contentHtml = renderMilkProductionTracker();
-            }
+             let contentHtml = '';
+             if (activeSubView === 'breeding') {
+                 contentHtml = renderBreedingTracker(breedingFormState);
+             } else if (activeSubView === 'health') {
+                 contentHtml = renderHealthTracker();
+             } else if (activeSubView === 'milk') {
+                 contentHtml = renderMilkProductionTracker();
+             } else if (activeSubView === 'animals') {
+                 contentHtml = getAnimalsViewHtml(farmData.animals);
+             }
 
             container.innerHTML = `
                 <h2 class="text-2xl md:text-3xl font-bold text-gray-800 mb-4">Animal Hub</h2>
-                <p class="text-gray-600 mb-8">Track individual animal breeding cycles and health records.</p>
+                <p class="text-gray-600 mb-8">Manage individual animal records, breeding cycles, and health history.</p>
                 
                 <div class="mb-8">
                     <div class="flex space-x-6 border-b-2 border-gray-200">
+                        <button onclick="renderAnimalHub('animals')" class="py-3 px-2 text-lg border-b-4 ${getSubTabClass('animals')}">
+                            Animal Records
+                        </button>
                         <button onclick="renderAnimalHub('breeding')" class="py-3 px-2 text-lg border-b-4 ${getSubTabClass('breeding')}">
                             Breeding Tracker
                         </button>
@@ -842,16 +950,19 @@
                     </div>
                 </div>
 
-                <div id="animal-hub-content">
-                    ${contentHtml}
-                </div>
+                 <div id="animal-hub-content">
+                     ${contentHtml}
+                 </div>
             `;
 
-            if (activeSubView === 'milk') {
-                // We need to render the list after the main container is in the DOM
-                // so the filter dropdown exists.
-                renderMilkProductionList();
-            }
+             if (activeSubView === 'milk') {
+                 // We need to render the list after the main container is in the DOM
+                 // so the filter dropdown exists.
+                 renderMilkProductionList();
+             } else if (activeSubView === 'animals') {
+                 // Initial render of tag suggestions and auto-ID for the default selected species
+                 setTimeout(handleAnimalSpeciesChange, 0);
+             }
         }
 
         window.handleBreedingFormChange = function() {
@@ -1751,6 +1862,237 @@
             `;
         }
         
+        // --- ANIMALS (INDIVIDUAL) ---
+
+        /**
+         * Generates the next sequential animal ID for a given species.
+         * e.g., if 'Cattle-101', 'Cattle-102' exist, it will return 'Cattle-103'.
+         */
+        function generateNextAnimalId(species) {
+            if (!species) return '';
+
+            // Filter animals of the same species to find the highest existing number.
+            const animalsOfSpecies = farmData.animals.filter(animal => animal.species === species);
+
+            let maxId = 0;
+            animalsOfSpecies.forEach(animal => {
+                // Use a regular expression to extract the number from the end of the ID.
+                // This is more robust for IDs like 'Cattle-101' or 'My-Goat-5'.
+                const match = animal.animalId.match(/(\d+)$/);
+                if (match && match[1]) {
+                    const idNumber = parseInt(match[1], 10);
+                    if (!isNaN(idNumber) && idNumber > maxId) {
+                        maxId = idNumber;
+                    }
+                }
+            });
+
+            return `${species}-${maxId + 1}`;
+        }
+
+        /**
+         * Handles changes in the animal species dropdown.
+         * Updates tag suggestions and generates a new suggested animal ID.
+         */
+        function handleAnimalSpeciesChange() {
+            renderAnimalTagSuggestions();
+            document.getElementById('animal-id').value = generateNextAnimalId(document.getElementById('animal-species').value);
+        }
+
+        /**
+         * Renders the tag suggestion buttons based on the selected species.
+         */
+        function renderAnimalTagSuggestions() {
+            const speciesSelect = document.getElementById('animal-species');
+            const suggestionsContainer = document.getElementById('suggested-tags-container');
+            if (!speciesSelect || !suggestionsContainer) return;
+
+            const selectedSpecies = speciesSelect.value;
+            const speciesTags = farmData.animalTags[selectedSpecies] || [];
+            const generalTags = farmData.animalTags.General || [];
+            const allSuggestions = [...new Set([...speciesTags, ...generalTags])]; // Combine and remove duplicates
+
+            suggestionsContainer.innerHTML = allSuggestions.map(tag =>
+                `<button type="button" onclick="addAnimalTag('${tag}')" class="px-2 py-1 text-xs bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300 transition">+ ${tag}</button>`
+            ).join('');
+        }
+
+        /**
+         * Adds a tag to the current selection in the 'Add Animal' form.
+         */
+        function addAnimalTag(tag) {
+            const selectedContainer = document.getElementById('selected-tags-container');
+            const tagsInput = document.getElementById('animal-tags-input');
+            if (!selectedContainer || !tagsInput) return;
+
+            const currentTags = tagsInput.value ? tagsInput.value.split(',') : [];
+            if (currentTags.includes(tag)) return; // Don't add duplicates
+
+            currentTags.push(tag);
+            tagsInput.value = currentTags.join(',');
+
+            // Create the visual tag badge
+            const tagElement = document.createElement('span');
+            tagElement.className = 'flex items-center px-2 py-1 text-xs font-medium bg-primary-green/20 text-primary-green-dark rounded-full';
+            tagElement.textContent = tag;
+            
+            const removeBtn = document.createElement('button');
+            removeBtn.type = 'button';
+            removeBtn.className = 'ml-1.5 text-primary-green-dark hover:text-red-500 font-bold';
+            removeBtn.innerHTML = '&times;';
+            removeBtn.onclick = () => removeAnimalTag(tagElement, tag);
+
+            tagElement.appendChild(removeBtn);
+            selectedContainer.appendChild(tagElement);
+        }
+
+        /**
+         * Removes a tag from the current selection.
+         */
+        function removeAnimalTag(tagElement, tag) {
+            const tagsInput = document.getElementById('animal-tags-input');
+            if (!tagsInput) return;
+
+            let currentTags = tagsInput.value ? tagsInput.value.split(',') : [];
+            currentTags = currentTags.filter(t => t !== tag);
+            tagsInput.value = currentTags.join(',');
+
+            tagElement.remove();
+        }
+
+        /**
+         * Renders the Individual Animals management view.
+         */
+        function getAnimalsViewHtml(animals) {
+            const sortedAnimals = animals.slice().sort((a, b) => (a.animalId > b.animalId) ? 1 : -1);
+
+            return `
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                    <!-- Add Animal Form -->
+                    <div class="lg:col-span-1 bg-card-bg p-8 rounded-2xl shadow-lg border border-gray-200/80 h-fit">
+                        <h3 class="text-xl font-bold mb-5 border-b pb-3 text-gray-800">Add New Animal</h3>
+                        <form id="add-animal-form" onsubmit="event.preventDefault(); handleAddAnimal();">
+                            <div class="mb-4">
+                                <label for="animal-id" class="block text-sm font-medium text-gray-700 mb-1">Unique Animal ID</label>
+                                <input type="text" id="animal-id" required placeholder="e.g., Cattle-101, Goat-54" class="input-focus w-full p-3 border border-gray-300 rounded-lg">
+                            </div>
+                            <div class="mb-4">
+                                <label for="animal-species" class="block text-sm font-medium text-gray-700 mb-1">Species</label>
+                                <select id="animal-species" required class="input-focus w-full p-3 border border-gray-300 rounded-lg" onchange="handleAnimalSpeciesChange()">
+                                    ${window.farmData.animalSpecies.map(s => `<option value="${s}">${s}</option>`).join('')}
+                                </select>
+                            </div>
+                            <div class="mb-4">
+                                <label for="animal-birth-date" class="block text-sm font-medium text-gray-700 mb-1">Birth Date</label>
+                                <input type="date" id="animal-birth-date" required class="input-focus w-full p-3 border border-gray-300 rounded-lg" value="${new Date().toISOString().substring(0, 10)}">
+                            </div>
+                            
+                            <!-- Tagging Section -->
+                            <div class="mb-6">
+                                <label class="block text-sm font-medium text-gray-700 mb-2">Tags</label>
+                                <input type="hidden" id="animal-tags-input" name="animal-tags">
+                                <div id="selected-tags-container" class="flex flex-wrap gap-2 mb-3 p-2 border border-gray-200 rounded-lg min-h-[40px]">
+                                    <!-- Selected tags will appear here -->
+                                </div>
+                                <p class="text-xs text-gray-500 mb-2">Suggestions:</p>
+                                <div id="suggested-tags-container" class="flex flex-wrap gap-2">
+                                    <!-- Tag suggestions will be rendered here by JS -->
+                                </div>
+                            </div>
+
+                            <button type="submit" class="w-full bg-primary-green text-white py-3 rounded-lg font-bold hover:bg-primary-green-dark transition shadow-md">Add Animal</button>
+                            <p id="animal-msg" class="text-center mt-3 text-sm font-medium"></p>
+                        </form>
+                    </div>
+
+                    <!-- Animal List -->
+                    <div class="lg:col-span-2">
+                        <div class="flex justify-between items-center mb-5 pb-3 border-b">
+                            <h3 class="text-xl font-bold text-gray-800">Registered Animals (${sortedAnimals.length})</h3>
+                            <button onclick="handleExportPdf('animals')" class="px-3 py-1.5 text-xs font-medium bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition flex items-center space-x-1"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg><span>PDF</span></button>
+                        </div>
+                        <div class="grid grid-cols-1 xl:grid-cols-2 gap-6">
+                            ${sortedAnimals.length > 0 ? sortedAnimals.map(animal => `
+                                <div class="bg-card-bg p-6 rounded-2xl shadow-lg border border-gray-200/80">
+                                    <div class="flex justify-between items-start border-b pb-4 mb-4">
+                                        <div>
+                                            <h4 class="text-lg font-bold text-primary-green">${animal.animalId}</h4>
+                                            <p class="text-sm text-gray-600">${animal.species}</p>
+                                            <p class="text-xs text-gray-500 mt-1">Born: ${animal.birthDate}</p>
+                                        </div>
+                                        <div class="flex-shrink-0 space-x-1">
+                                            <button onclick="window.openEditModal('${animal.id}', 'animals')" class="text-blue-600 hover:text-blue-800 p-1.5 rounded-full hover:bg-blue-100" title="Edit Animal">
+                                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-7-3l-4 4V14h3l4-4M16 5l3 3m-8 10h.01"></path></svg>
+                                            </button>
+                                            <button onclick="window.confirmDelete('${animal.id}', 'animals')" class="text-red-600 hover:text-red-800 p-1.5 rounded-full hover:bg-red-100" title="Delete Animal">
+                                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                                            </button>
+                                        </div>
+                                    </div>
+                                    <div class="flex flex-wrap gap-2">
+                                        ${animal.tags && animal.tags.length > 0
+                                            ? animal.tags.map(tag => `<span class="px-2 py-1 text-xs font-medium bg-blue-100 text-blue-700 rounded-full">${tag}</span>`).join('')
+                                            : '<p class="text-xs text-gray-500 italic">No tags assigned.</p>'
+                                        }
+                                    </div>
+                                </div>
+                            `).join('') : `
+                                <div class="xl:col-span-2 text-center text-gray-500 italic py-10 bg-card-bg rounded-2xl shadow-lg border border-gray-200/80">
+                                    <p>No individual animals registered.</p>
+                                    <p class="text-sm">Use the form on the left to add your first animal.</p>
+                                </div>
+                            `}
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        /**
+         * Handles the submission of the Add Animal form.
+         */
+        window.handleAddAnimal = async function() {
+            const animalId = document.getElementById('animal-id').value.trim();
+            const species = document.getElementById('animal-species').value;
+            const birthDate = document.getElementById('animal-birth-date').value;
+            const tags = document.getElementById('animal-tags-input').value.split(',').filter(t => t); // Filter out empty strings
+            const msgEl = document.getElementById('animal-msg');
+
+            if (!animalId || !species || !birthDate) {
+                msgEl.textContent = 'Animal ID, Species, and Birth Date are required.';
+                msgEl.className = 'text-center mt-3 text-sm text-red-500 font-medium';
+                return;
+            }
+
+            // Check for duplicate animalId
+            if (farmData.animals.some(animal => animal.animalId === animalId)) {
+                msgEl.textContent = `An animal with ID '${animalId}' already exists.`;
+                msgEl.className = 'text-center mt-3 text-sm text-red-500 font-medium';
+                return;
+            }
+
+            const record = {
+                id: Date.now().toString(),
+                animalId,
+                species,
+                birthDate,
+                tags
+            };
+
+            farmData.animals.push(record);
+            saveData();
+            generateAndRenderNotifications();
+            renderAnimalHub('animals'); // Re-render the view
+
+            msgEl.textContent = `Animal '${animalId}' added successfully!`;
+            msgEl.className = 'text-center mt-3 text-sm text-green-600 font-medium';
+            document.getElementById('add-animal-form').reset();
+            document.getElementById('animal-birth-date').value = new Date().toISOString().substring(0, 10);
+            document.getElementById('selected-tags-container').innerHTML = ''; // Clear visual tags
+            renderAnimalTagSuggestions(); // Reset suggestions
+            setTimeout(() => msgEl.textContent = '', 3000);
+        }
+
         /**
          * Renders the detailed transaction list HTML.
          */
@@ -3561,6 +3903,12 @@
                     data = farmData.journal.map(i => [i.date, i.notes]);
                     filename = `farm-journal_${now}.pdf`;
                     break;
+                case 'animals':
+                    reportTitle = 'Individual Animal Records';
+                    headers = ['Animal ID', 'Species', 'Birth Date', 'Tags'];
+                    data = farmData.animals.map(i => [i.animalId, i.species, i.birthDate, (i.tags || []).join(', ')]);
+                    filename = `animal-records_${now}.pdf`;
+                    break;
                 default:
                     return; // Do nothing if collection is unknown
             }
@@ -3909,10 +4257,12 @@
 
         window.handleUpdateProfile = function() {
             const displayName = document.getElementById('display-name').value.trim();
+            const email = document.getElementById('profile-email').value.trim();
             const imgPreview = document.getElementById('profile-preview').src;
             const msgEl = document.getElementById('profile-msg');
 
             owner.displayName = displayName;
+            owner.email = email;
             if (imgPreview.startsWith('data:image')) {
                 owner.profilePic = imgPreview;
             }
@@ -3974,6 +4324,10 @@
                                 <div class="flex-grow w-full">
                                     <label for="display-name" class="block text-sm font-medium text-gray-700 mb-1">Display Name</label>
                                     <input type="text" id="display-name" placeholder="e.g. Farm Owner" class="input-focus w-full p-3 border border-gray-300 rounded-lg" value="${owner.displayName || ''}">
+                                    
+                                    <label for="profile-email" class="block text-sm font-medium text-gray-700 mt-3 mb-1">Recovery Email</label>
+                                    <input type="email" id="profile-email" placeholder="your@email.com" class="input-focus w-full p-3 border border-gray-300 rounded-lg" value="${owner.email || ''}">
+                                    
                                     <p class="text-xs text-gray-500 mt-1">This name will appear in the dashboard header.</p>
                                 </div>
                             </div>
@@ -4179,6 +4533,8 @@
             if (collectionName === 'breeding' || collectionName === 'health' || collectionName === 'milkProduction') {
                 const subView = collectionName === 'milkProduction' ? 'milk' : collectionName;
                 renderAnimalHub(subView);
+            } else if (collectionName === 'animals') {
+                renderAnimalHub('animals');
             } else if (collectionName === 'journal') {
                 renderJournal(farmData.journal);
             } else if (collectionName === 'equipment') {
@@ -4469,8 +4825,14 @@
                     break;
 
                 case 'breeding':
+                    const breedingAnimals = farmData.animals.filter(a => a.species === record.species);
+                    const breedingOptions = breedingAnimals.map(a => ({ value: a.animalId, text: a.animalId }));
+                    if (!breedingOptions.find(o => o.value === record.animalId)) {
+                        breedingOptions.unshift({ value: record.animalId, text: `${record.animalId} (Archived)` });
+                    }
+
                     formHtml = `
-                        ${input('edit-breeding-animal-id', 'Animal ID', 'text', record.animalId)}
+                        ${select('edit-breeding-animal-id', 'Animal ID', breedingOptions, record.animalId)}
                         ${select('edit-breeding-species', 'Species', farmData.animalSpecies, record.species)}
                         ${input('edit-breeding-service-date', 'Service Date', 'date', record.serviceDate)}
                         ${select('edit-breeding-status', 'Status', farmData.breedingStatuses, record.status)}
@@ -4480,12 +4842,28 @@
                     break;
 
                 case 'health':
+                    const healthAnimals = farmData.animals.map(a => ({ value: a.animalId, text: `${a.animalId} (${a.species})` }));
+                    if (!healthAnimals.find(o => o.value === record.animalId)) {
+                        healthAnimals.unshift({ value: record.animalId, text: `${record.animalId} (Archived)` });
+                    }
+
                     formHtml = `
-                        ${input('edit-health-animal-id', 'Animal ID', 'text', record.animalId)}
+                        ${select('edit-health-animal-id', 'Animal ID', healthAnimals, record.animalId)}
                         ${input('edit-health-record-date', 'Record Date', 'date', record.recordDate)}
                         ${textarea('edit-health-diagnosis', 'Diagnosis', record.diagnosis)}
                         ${textarea('edit-health-treatment', 'Treatment', record.treatment)}
                         ${input('edit-health-veterinarian', 'Veterinarian', 'text', record.veterinarian)}
+                        <input type="hidden" id="edit-record-id" value="${id}">
+                        <input type="hidden" id="edit-collection-name" value="${collectionName}">
+                    `;
+                    break;
+
+                case 'animals':
+                    formHtml = `
+                        ${input('edit-animal-id', 'Unique Animal ID', 'text', record.animalId)}
+                        ${select('edit-animal-species', 'Species', farmData.animalSpecies, record.species)}
+                        ${input('edit-animal-birth-date', 'Birth Date', 'date', record.birthDate)}
+                        <p class="text-sm text-gray-500 italic mt-4">Note: Tags cannot be edited from this modal. Please delete and re-add the animal to change its tags.</p>
                         <input type="hidden" id="edit-record-id" value="${id}">
                         <input type="hidden" id="edit-collection-name" value="${collectionName}">
                     `;
@@ -4638,6 +5016,18 @@
                         }
                         break;
 
+                    case 'animals':
+                        updatedRecord.animalId = document.getElementById('edit-animal-id').value.trim();
+                        updatedRecord.species = document.getElementById('edit-animal-species').value;
+                        updatedRecord.birthDate = document.getElementById('edit-animal-birth-date').value;
+                        // Tags are not editable in this simplified modal
+                        updatedRecord.tags = record.tags;
+
+                        if (updatedRecord.animalId && updatedRecord.species && updatedRecord.birthDate) {
+                            isValid = true;
+                        }
+                        break;
+
                     case 'equipment':
                         updatedRecord.name = document.getElementById('edit-equipment-name').value.trim();
                         updatedRecord.model = document.getElementById('edit-equipment-model').value.trim();
@@ -4660,6 +5050,8 @@
                         renderEquipment(farmData.equipment);
                     } else if (collectionName === 'breeding' || collectionName === 'health') {
                         renderAnimalHub(collectionName);
+                    } else if (collectionName === 'animals') {
+                        renderAnimalHub('animals');
                     } else if (collectionName === 'journal') {
                         renderJournal(farmData.journal);
                     } else {
