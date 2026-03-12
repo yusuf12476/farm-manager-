@@ -373,21 +373,158 @@
         </div>
     </div>
 
-    <!-- LOCAL DATA SCRIPT -->
+    <!-- SUPABASE INTEGRATION SCRIPT -->
     <script>
-        // --- LOCAL DATA STATE ---
-        let isAuthReady = false;
-        let currentEditingRecord = null; // Stores the id and collection of the record being edited
+        // ============================================================
+        // SUPABASE CONFIG
+        // ============================================================
+        const SUPABASE_URL  = 'https://ytljklxpshegztauecgt.supabase.co';
+        const SUPABASE_KEY  = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inl0bGprbHhwc2hlZ3p0YXVlY2d0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzMzMjEzMDMsImV4cCI6MjA4ODg5NzMwM30.-ZKyjnBVATmDKDdz9ZEIyYPkX1DqRD836p7fIpU4NwI';
 
-        // Global filter state and chart instances for Finance tab
+        // ============================================================
+        // SUPABASE HELPERS  (raw REST — no SDK)
+        // ============================================================
+        let _sbAccessToken = null;   // set after login
+
+        function sbHeaders(extra = {}) {
+            const h = {
+                'Content-Type': 'application/json',
+                'apikey': SUPABASE_KEY,
+                'Prefer': 'return=representation',
+                ...extra
+            };
+            if (_sbAccessToken) h['Authorization'] = `Bearer ${_sbAccessToken}`;
+            return h;
+        }
+
+        /** Auth: sign up with email+password */
+        async function sbSignUp(email, password) {
+            const r = await fetch(`${SUPABASE_URL}/auth/v1/signup`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_KEY },
+                body: JSON.stringify({ email, password })
+            });
+            return r.json();
+        }
+
+        /** Auth: sign in */
+        async function sbSignIn(email, password) {
+            const r = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=password`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_KEY },
+                body: JSON.stringify({ email, password })
+            });
+            return r.json();
+        }
+
+        /** Auth: sign out */
+        async function sbSignOut() {
+            if (!_sbAccessToken) return;
+            await fetch(`${SUPABASE_URL}/auth/v1/logout`, {
+                method: 'POST',
+                headers: sbHeaders()
+            });
+            _sbAccessToken = null;
+        }
+
+        /** Auth: send password-reset email */
+        async function sbResetPassword(email) {
+            const r = await fetch(`${SUPABASE_URL}/auth/v1/recover`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_KEY },
+                body: JSON.stringify({ email })
+            });
+            return r.json();
+        }
+
+        /** Auth: refresh session using refresh_token */
+        async function sbRefreshSession(refreshToken) {
+            const r = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=refresh_token`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_KEY },
+                body: JSON.stringify({ refresh_token: refreshToken })
+            });
+            return r.json();
+        }
+
+        /**
+         * Upsert (insert or update) a single row in `farm_data` table.
+         * Schema: id (uuid PK), user_id (uuid), collection (text), record_id (text), data (jsonb)
+         * Unique constraint on (user_id, collection, record_id)
+         */
+        async function sbUpsert(collection, record) {
+            const userId = _currentUserId;
+            const body = {
+                user_id: userId,
+                collection,
+                record_id: record.id,
+                data: record
+            };
+            const r = await fetch(`${SUPABASE_URL}/rest/v1/farm_data`, {
+                method: 'POST',
+                headers: { ...sbHeaders(), 'Prefer': 'resolution=merge-duplicates,return=representation' },
+                body: JSON.stringify(body)
+            });
+            if (!r.ok) {
+                const err = await r.text();
+                console.error('sbUpsert error:', err);
+            }
+        }
+
+        /** Delete a single record */
+        async function sbDelete(collection, recordId) {
+            const userId = _currentUserId;
+            const r = await fetch(
+                `${SUPABASE_URL}/rest/v1/farm_data?user_id=eq.${userId}&collection=eq.${collection}&record_id=eq.${recordId}`,
+                { method: 'DELETE', headers: sbHeaders() }
+            );
+            if (!r.ok) console.error('sbDelete error:', await r.text());
+        }
+
+        /** Fetch all records for a collection */
+        async function sbFetchCollection(collection) {
+            const userId = _currentUserId;
+            const r = await fetch(
+                `${SUPABASE_URL}/rest/v1/farm_data?user_id=eq.${userId}&collection=eq.${collection}&select=data`,
+                { headers: sbHeaders() }
+            );
+            if (!r.ok) { console.error('sbFetch error:', await r.text()); return []; }
+            const rows = await r.json();
+            return rows.map(row => row.data);
+        }
+
+        /** Fetch user profile row */
+        async function sbFetchProfile() {
+            const userId = _currentUserId;
+            const r = await fetch(
+                `${SUPABASE_URL}/rest/v1/user_profiles?user_id=eq.${userId}&select=*`,
+                { headers: sbHeaders() }
+            );
+            if (!r.ok) return null;
+            const rows = await r.json();
+            return rows[0] || null;
+        }
+
+        /** Upsert user profile */
+        async function sbUpsertProfile(profileData) {
+            const userId = _currentUserId;
+            const r = await fetch(`${SUPABASE_URL}/rest/v1/user_profiles`, {
+                method: 'POST',
+                headers: { ...sbHeaders(), 'Prefer': 'resolution=merge-duplicates,return=representation' },
+                body: JSON.stringify({ user_id: userId, ...profileData })
+            });
+            if (!r.ok) console.error('sbUpsertProfile error:', await r.text());
+        }
+
+        // ============================================================
+        // APP STATE
+        // ============================================================
+        let isAuthReady = false;
+        let currentEditingRecord = null;
+        let _currentUserId = null;
+
         let viewFilters = {
-            finance: {
-                type: 'all',
-                category: 'all',
-                dateRange: 'all',
-                startDate: null,
-                endDate: null
-            },
+            finance: { type: 'all', category: 'all', dateRange: 'all', startDate: null, endDate: null },
             tasks: { isOverdue: false },
             analytics: { selectedYear: null }
         };
@@ -400,20 +537,49 @@
         let livestockCompositionChart = null;
         let populationGrowthChart = null;
         let taskStatusChart = null;
-
         let chartInstances = {};
         let profitabilityForecastChart = null;
-        // Inactivity timer state
         let inactivityTimer;
-        const INACTIVITY_TIMEOUT = 15 * 60 * 1000; // 15 minutes
+        const INACTIVITY_TIMEOUT = 15 * 60 * 1000;
 
-        // --- LOCAL STORAGE & DATA MANAGEMENT ---
-        let owner = null; // Will hold { userId, password }
+        // owner is now just a display/profile object (no password stored)
+        let owner = null;
+
+        // ============================================================
+        // saveData — persists a SINGLE collection to Supabase
+        // Called after every mutation. Also keeps localStorage as cache.
+        // ============================================================
+        const _collectionsToSync = [
+            'livestock','transactions','production','tasks','inventory',
+            'animals','breeding','health','equipment','journal','milkProduction'
+        ];
 
         /**
-         * Saves the entire farmData object to local storage.
+         * Save all records in a collection to Supabase.
+         * We do a full collection sync by upserting every record.
+         * For large datasets you'd diff, but for a farm app this is fine.
          */
-        const saveData = () => localStorage.setItem('farmData', JSON.stringify(window.farmData));
+        async function saveCollection(collection) {
+            const records = window.farmData[collection];
+            if (!Array.isArray(records)) return;
+            // Upsert each record (Supabase handles insert-or-update)
+            const promises = records.map(rec => sbUpsert(collection, rec));
+            await Promise.all(promises);
+            // Also cache locally
+            localStorage.setItem('farmData', JSON.stringify(window.farmData));
+        }
+
+        /**
+         * Legacy saveData — determines which collection changed and syncs it.
+         * We detect the last-mutated collection via a small trick: each handler
+         * calls saveCollection(collectionName) directly. saveData() is kept as
+         * a fallback that syncs everything.
+         */
+        const saveData = () => {
+            localStorage.setItem('farmData', JSON.stringify(window.farmData));
+            // Async fire-and-forget sync of all collections
+            _collectionsToSync.forEach(col => saveCollection(col));
+        };
 
 
         window.farmData = {
@@ -466,7 +632,7 @@
         }
 
         /**
-         * Renders the content of the security modal (setup or login).
+         * Renders the content of the security modal (setup or login) — Supabase Auth version.
          */
         function renderSecurityModal(state, message = '') {
             const content = document.getElementById('security-modal-content');
@@ -476,45 +642,41 @@
             if (state === 'setup') {
                 html = `
                     <h3 class="text-lg md:text-xl font-bold mb-2 text-gray-800">Create Your Account</h3>
-                    <p class="text-sm text-gray-600 mb-4">Create a User ID and password to secure your farm data.</p>
-                    <input type="text" id="setup-farmname" required placeholder="Your Farm's Name" class="input-focus w-full p-3 border border-gray-300 rounded-lg mb-2">
+                    <p class="text-sm text-gray-600 mb-4">Sign up with your email to secure your farm data in the cloud.</p>
                     <form onsubmit="event.preventDefault(); handleCreateUser();">
-                        <input type="text" id="setup-userid" required placeholder="Create a User ID" class="input-focus w-full p-3 border border-gray-300 rounded-lg mb-2">
-                        <input type="email" id="setup-email" required placeholder="Recovery Email" class="input-focus w-full p-3 border border-gray-300 rounded-lg mb-2">
-                        <input type="password" id="setup-password" required placeholder="Create a strong password" class="input-focus w-full p-3 border border-gray-300 rounded-lg mb-2">
+                        <input type="text" id="setup-farmname" required placeholder="Your Farm's Name" class="input-focus w-full p-3 border border-gray-300 rounded-lg mb-2">
+                        <input type="text" id="setup-userid" required placeholder="Display Name / User ID" class="input-focus w-full p-3 border border-gray-300 rounded-lg mb-2">
+                        <input type="email" id="setup-email" required placeholder="Email Address" class="input-focus w-full p-3 border border-gray-300 rounded-lg mb-2">
+                        <input type="password" id="setup-password" required placeholder="Create a strong password (min 6 chars)" class="input-focus w-full p-3 border border-gray-300 rounded-lg mb-2">
                         <input type="password" id="setup-password-confirm" required placeholder="Confirm password" class="input-focus w-full p-3 border border-gray-300 rounded-lg">
                         ${errorHtml}
-                        <button type="submit" class="w-full mt-4 bg-primary-green text-white py-3 rounded-lg font-bold hover:bg-primary-green-dark transition">Create Account & Start</button>
+                        <button type="submit" id="setup-btn" class="w-full mt-4 bg-primary-green text-white py-3 rounded-lg font-bold hover:bg-primary-green-dark transition">Create Account & Start</button>
                     </form>
+                    <div class="flex justify-between items-center mt-4">
+                        <button onclick="renderSecurityModal('login')" class="text-xs text-blue-500 hover:underline">Already have an account? Login</button>
+                    </div>
                 `;
             } else if (state === 'forgot-password') {
                 html = `
-                    <h3 class="text-lg md:text-xl font-bold mb-4 text-gray-800">Recover Password</h3>
-                    <p class="text-sm text-gray-600 mb-4">Enter your recovery email to reset your password.</p>
+                    <h3 class="text-lg md:text-xl font-bold mb-4 text-gray-800">Reset Password</h3>
+                    <p class="text-sm text-gray-600 mb-4">Enter your email and we'll send you a password reset link.</p>
                     <form onsubmit="event.preventDefault(); handleRecoverPassword();">
                         <input type="email" id="recover-email" required placeholder="Your Registered Email" class="input-focus w-full p-3 border border-gray-300 rounded-lg mb-2">
-                        <div id="recovery-new-password-fields" class="hidden space-y-2 mb-2">
-                             <input type="password" id="recover-new-password" placeholder="New Password" class="input-focus w-full p-3 border border-gray-300 rounded-lg">
-                             <input type="password" id="recover-confirm-password" placeholder="Confirm New Password" class="input-focus w-full p-3 border border-gray-300 rounded-lg">
-                        </div>
                         ${errorHtml}
-                        <button type="submit" id="recovery-btn" class="w-full mt-4 bg-primary-green text-white py-3 rounded-lg font-bold hover:bg-primary-green-dark transition">Verify Email</button>
+                        <button type="submit" id="recovery-btn" class="w-full mt-4 bg-primary-green text-white py-3 rounded-lg font-bold hover:bg-primary-green-dark transition">Send Reset Link</button>
                     </form>
                     <div class="flex justify-between items-center mt-4">
                         <button onclick="renderSecurityModal('login')" class="text-xs text-blue-500 hover:underline">Back to Login</button>
-                        <button onclick="handleResetApp()" class="text-xs text-red-500 hover:underline">Hard Reset (Clear Data)</button>
                     </div>
                 `;
             } else { // 'login'
                 html = `
                     <h3 id="login-title" class="text-lg md:text-xl font-bold mb-4 text-gray-800">Login to Your Farm</h3>
                     <form onsubmit="event.preventDefault(); handleLogin();">
-                        <div id="login-step-1">
-                            <input type="text" id="login-userid" required placeholder="Your User ID" class="input-focus w-full p-3 border border-gray-300 rounded-lg mb-2" pattern="[a-z0-9_]+">
-                            <input type="password" id="login-password" required placeholder="Your Password" class="input-focus w-full p-3 border border-gray-300 rounded-lg">
-                        </div>
+                        <input type="email" id="login-email" required placeholder="Email Address" class="input-focus w-full p-3 border border-gray-300 rounded-lg mb-2">
+                        <input type="password" id="login-password" required placeholder="Your Password" class="input-focus w-full p-3 border border-gray-300 rounded-lg">
                         ${errorHtml}
-                        <button type="submit" class="w-full mt-4 bg-primary-green text-white py-3 rounded-lg font-bold hover:bg-primary-green-dark transition">Unlock</button>
+                        <button type="submit" id="login-btn" class="w-full mt-4 bg-primary-green text-white py-3 rounded-lg font-bold hover:bg-primary-green-dark transition">Login</button>
                     </form>
                     <div class="flex justify-between items-center mt-4">
                         <button onclick="renderSecurityModal('setup')" class="text-xs text-blue-500 hover:underline">Create a new account</button>
@@ -526,106 +688,79 @@
         }
 
         async function handleCreateUser() {
-            const farmName = document.getElementById('setup-farmname').value.trim();
-            const userId = document.getElementById('setup-userid').value.trim();
-            const email = document.getElementById('setup-email').value.trim();
-            const pass = document.getElementById('setup-password').value;
+            const farmName  = document.getElementById('setup-farmname').value.trim();
+            const userId    = document.getElementById('setup-userid').value.trim();
+            const email     = document.getElementById('setup-email').value.trim();
+            const pass      = document.getElementById('setup-password').value;
             const confirmPass = document.getElementById('setup-password-confirm').value;
+            const btn = document.getElementById('setup-btn');
 
-            if (!farmName) {
-                renderSecurityModal('setup', 'Farm Name is required.');
+            if (!farmName)  { renderSecurityModal('setup', 'Farm Name is required.'); return; }
+            if (!userId)    { renderSecurityModal('setup', 'Display Name is required.'); return; }
+            if (!email || !email.includes('@')) { renderSecurityModal('setup', 'Valid email is required.'); return; }
+            if (pass.length < 6) { renderSecurityModal('setup', 'Password must be at least 6 characters.'); return; }
+            if (pass !== confirmPass) { renderSecurityModal('setup', 'Passwords do not match.'); return; }
+
+            btn.textContent = 'Creating account...';
+            btn.disabled = true;
+
+            const result = await sbSignUp(email, pass);
+
+            if (result.error) {
+                renderSecurityModal('setup', result.error.message || 'Sign-up failed. Try a different email.');
                 return;
             }
 
-            if (!email || !email.includes('@')) {
-                renderSecurityModal('setup', 'Valid recovery email is required.');
+            // Sign in immediately after signup
+            const loginResult = await sbSignIn(email, pass);
+            if (loginResult.error) {
+                renderSecurityModal('login', 'Account created! Please check your email to confirm, then login.');
                 return;
             }
 
-            if (pass.length < 6) {
-                renderSecurityModal('setup', 'Password must be at least 6 characters long.');
-                return;
-            }
-            if (pass !== confirmPass) {
-                renderSecurityModal('setup', 'Passwords do not match.');
-                return;
-            }
-            
-            owner = { userId, password: pass, email };
-            localStorage.setItem('farmOwner', JSON.stringify(owner));
+            _sbAccessToken = loginResult.access_token;
+            _currentUserId = loginResult.user.id;
+
+            // Save refresh token for session persistence
+            localStorage.setItem('sb_refresh', loginResult.refresh_token);
+            localStorage.setItem('sb_user_id', _currentUserId);
+
+            // Save profile
+            owner = { userId, email, displayName: userId };
+            await sbUpsertProfile({ display_name: userId, farm_name: farmName, email });
+
             window.farmData.farmName = farmName;
-            saveData();
-
-            // After successful registration, log in automatically
-            await handleLogin(userId, pass);
+            await startApp(_currentUserId, userId, farmName);
         }
 
         async function handleRecoverPassword() {
-            const emailInput = document.getElementById('recover-email');
-            const email = emailInput.value.trim();
-            const fieldsContainer = document.getElementById('recovery-new-password-fields');
+            const email = document.getElementById('recover-email').value.trim();
             const btn = document.getElementById('recovery-btn');
-            const contentDiv = document.getElementById('security-modal-content');
-            
-            const showError = (msg) => {
-                let err = contentDiv.querySelector('.error-msg');
-                if (!err) {
-                    err = document.createElement('p');
-                    err.className = 'error-msg text-red-500 text-sm font-medium mt-3 text-center';
-                    const form = contentDiv.querySelector('form');
-                    form.insertBefore(err, btn);
-                }
-                err.textContent = msg;
-            };
 
-            if (!owner) {
-                 const ownerData = localStorage.getItem('farmOwner');
-                 if (ownerData) owner = JSON.parse(ownerData);
+            if (!email) return;
+            btn.textContent = 'Sending...';
+            btn.disabled = true;
+
+            const result = await sbResetPassword(email);
+            if (result.error) {
+                btn.textContent = 'Send Reset Link';
+                btn.disabled = false;
+                const content = document.getElementById('security-modal-content');
+                let err = content.querySelector('.error-msg');
+                if (!err) { err = document.createElement('p'); err.className = 'error-msg text-red-500 text-sm font-medium mt-3 text-center'; content.appendChild(err); }
+                err.textContent = result.error.message || 'Failed to send reset email.';
+            } else {
+                renderSecurityModal('login', 'Password reset email sent! Check your inbox, then login with your new password.');
             }
-
-            if (!owner || !owner.email) {
-                showError('No account found or no recovery email set. Please perform a Hard Reset.');
-                return;
-            }
-
-            if (owner.email.toLowerCase() !== email.toLowerCase()) {
-                showError('Email does not match our records.');
-                return;
-            }
-
-            if (fieldsContainer.classList.contains('hidden')) {
-                fieldsContainer.classList.remove('hidden');
-                emailInput.disabled = true;
-                btn.textContent = 'Reset Password';
-                const err = contentDiv.querySelector('.error-msg');
-                if(err) err.remove();
-                return;
-            }
-
-            const newPass = document.getElementById('recover-new-password').value;
-            const confirmPass = document.getElementById('recover-confirm-password').value;
-
-            if (newPass.length < 6) {
-                showError('New password must be at least 6 characters.');
-                return;
-            }
-            if (newPass !== confirmPass) {
-                showError('Passwords do not match.');
-                return;
-            }
-
-            owner.password = newPass;
-            localStorage.setItem('farmOwner', JSON.stringify(owner));
-            renderSecurityModal('login', 'Password reset successful! Please login.');
         }
 
         /**
-         * Logs the user out by reloading the page, which will trigger the security check.
+         * Logs the user out via Supabase and reloads.
          */
         async function handleLogout() {
-            try {
-                await fetch('auth.php?action=logout'); // This can be removed, but harmless if it fails
-            } catch (error) {}
+            await sbSignOut();
+            localStorage.removeItem('sb_refresh');
+            localStorage.removeItem('sb_user_id');
             window.location.reload();
         }
 
@@ -994,7 +1129,7 @@
             record.id = Date.now().toString(); // Assign a local unique ID
             farmData.breeding.push(record);
             farmData.breeding.sort((a, b) => new Date(b.serviceDate) - new Date(a.serviceDate));
-            saveData();
+            saveCollection('breeding');
             generateAndRenderNotifications();
             renderDashboard(farmData.livestock, farmData.transactions, farmData.production, farmData.tasks, farmData.inventory);
             renderAnimalHub('breeding');
@@ -1026,7 +1161,7 @@
             };
 
             farmData.milkProduction.push(record);
-            saveData();
+            saveCollection('milkProduction');
             generateAndRenderNotifications();
             renderAnimalHub('milk'); // Re-render the whole view to update filter options
 
@@ -1062,7 +1197,7 @@
 
             farmData.health.push(record);
             farmData.health.sort((a, b) => new Date(b.recordDate) - new Date(a.recordDate));
-            saveData();
+            saveCollection('health');
             generateAndRenderNotifications();
             renderAnimalHub('health');
 
@@ -1079,7 +1214,7 @@
                     record.status = newStatus; // Optimistic update
                     renderAnimalHub('breeding');
 
-                    saveData(); // Save the change
+                    saveCollection('breeding'); // Save the change
                     generateAndRenderNotifications();
                     renderDashboard(farmData.livestock, farmData.transactions, farmData.production, farmData.tasks, farmData.inventory);
                 } catch (error) {
@@ -1197,7 +1332,7 @@
             record.id = Date.now().toString();
             record.maintenanceLog = []; // Initialize with empty log
             farmData.equipment.push(record);
-            saveData();
+            saveCollection('equipment');
             generateAndRenderNotifications();
             changeView('equipment');
 
@@ -1230,7 +1365,7 @@
             };
 
             equipment.maintenanceLog.push(logEntry);
-            saveData();
+            saveCollection('equipment');
             generateAndRenderNotifications();
             renderEquipment(farmData.equipment);
         }
@@ -1238,96 +1373,134 @@
         // --- INITIALIZATION ---
 
         /**
-         * Initializes the local application, loads data, and sets up the UI.
+         * Initializes the app — checks for existing Supabase session first.
          */
         async function initializeLocalApp() {
             const modalContainer = document.getElementById('security-modal-container');
-            const ownerData = localStorage.getItem('farmOwner');
 
-            if (ownerData) {
-                owner = JSON.parse(ownerData);
-                renderSecurityModal('login');
-            } else {
-                renderSecurityModal('setup', 'Welcome! Create the primary account for your farm.');
+            // Try to restore session from stored refresh token
+            const storedRefresh = localStorage.getItem('sb_refresh');
+            if (storedRefresh) {
+                const result = await sbRefreshSession(storedRefresh);
+                if (result.access_token) {
+                    _sbAccessToken = result.access_token;
+                    _currentUserId = result.user.id;
+                    localStorage.setItem('sb_refresh', result.refresh_token);
+
+                    const profile = await sbFetchProfile();
+                    const displayName = profile?.display_name || 'Farmer';
+                    const farmName    = profile?.farm_name    || 'My Farm';
+                    owner = { userId: displayName, email: result.user.email, displayName, profilePic: profile?.profile_pic || null };
+                    await startApp(_currentUserId, displayName, farmName);
+                    return;
+                }
             }
+
+            // No valid session — show login
+            renderSecurityModal('login');
             modalContainer.classList.remove('scale-95', 'opacity-0');
             modalContainer.classList.add('scale-100', 'opacity-100');
         }
 
-        async function handleLogin(prefilledUserId = null, prefilledPassword = null) {
-            const userId = prefilledUserId || document.getElementById('login-userid').value.trim();
-            const password = prefilledPassword || document.getElementById('login-password').value;
+        async function handleLogin() {
+            const email    = document.getElementById('login-email').value.trim();
+            const password = document.getElementById('login-password').value;
+            const btn = document.getElementById('login-btn');
 
-            // If owner isn't loaded (e.g., direct login after setup), load it.
-            if (!owner) {
-                const ownerData = localStorage.getItem('farmOwner');
-                if (ownerData) {
-                    owner = JSON.parse(ownerData);
-                }
+            if (!email || !password) { renderSecurityModal('login', 'Email and password are required.'); return; }
+
+            btn.textContent = 'Logging in...';
+            btn.disabled = true;
+
+            const result = await sbSignIn(email, password);
+
+            if (result.error) {
+                renderSecurityModal('login', result.error.message || 'Invalid email or password.');
+                return;
             }
 
-            if (owner && owner.userId === userId && owner.password === password) {
-                await startApp(owner.userId);
-            } else {
-                renderSecurityModal('login', 'Invalid User ID or password.');
-            }
+            _sbAccessToken = result.access_token;
+            _currentUserId = result.user.id;
+            localStorage.setItem('sb_refresh', result.refresh_token);
+
+            const profile = await sbFetchProfile();
+            const displayName = profile?.display_name || email.split('@')[0];
+            const farmName    = profile?.farm_name    || 'My Farm';
+            owner = { userId: displayName, email, displayName, profilePic: profile?.profile_pic || null };
+
+            await startApp(_currentUserId, displayName, farmName);
         }
 
-        function handleResetApp() {            
-            if (confirm("Are you sure you want to reset the application? This will delete ALL your data and the account. This action cannot be undone.")) {
-                localStorage.clear();
+        function handleResetApp() {
+            if (confirm('This will clear your local session only. Your cloud data is safe. Continue?')) {
+                localStorage.removeItem('sb_refresh');
+                localStorage.removeItem('sb_user_id');
                 window.location.reload();
             }
         }
 
         /**
-         * Starts the main application after successful login/setup.
+         * Starts the main application after successful login — loads all data from Supabase.
          */
-        async function startApp(currentUserId) {
-            // Hide the security modal
+        async function startApp(currentUserId, displayName, farmName) {
+            // Show loading state in modal
+            const modalContent = document.getElementById('security-modal-content');
+            modalContent.innerHTML = `
+                <div class="text-center py-6">
+                    <div class="inline-block w-10 h-10 border-4 border-primary-green border-t-transparent rounded-full animate-spin mb-4"></div>
+                    <p class="text-gray-700 font-medium">Loading your farm data...</p>
+                </div>
+            `;
+            document.getElementById('security-modal-container').classList.remove('scale-95','opacity-0');
+            document.getElementById('security-modal-container').classList.add('scale-100','opacity-100');
+
+            loadFiltersFromLocalStorage();
+
+            // Load all collections from Supabase in parallel
+            const freshConfig = { ...window.farmData };
+            const configKeys = [
+                'livestockTypes','productionTypes','transactionCategories',
+                'taskPriorities','taskStatuses','inventoryCategories',
+                'animalSpecies','breedingStatuses','milkingTimes','gestationDays','animalTags'
+            ];
+
+            const dataKeys = [
+                'livestock','transactions','production','tasks','inventory',
+                'animals','breeding','health','equipment','journal','milkProduction'
+            ];
+
+            try {
+                const results = await Promise.all(dataKeys.map(col => sbFetchCollection(col)));
+                dataKeys.forEach((col, i) => {
+                    window.farmData[col] = results[i];
+                });
+            } catch(e) {
+                console.error('Error loading from Supabase, falling back to cache', e);
+                const cached = localStorage.getItem('farmData');
+                if (cached) {
+                    const parsed = JSON.parse(cached);
+                    dataKeys.forEach(col => { window.farmData[col] = parsed[col] || []; });
+                }
+            }
+
+            // Restore fresh config keys
+            configKeys.forEach(key => { if (freshConfig[key]) window.farmData[key] = freshConfig[key]; });
+            window.farmData.farmName = farmName;
+
+            // Cache locally
+            localStorage.setItem('farmData', JSON.stringify(window.farmData));
+
+            isAuthReady = true;
+            updateUserProfileUI();
+            renderAllViews();
+            changeView('dashboard');
+
+            // Hide modal
             const securityModal = document.getElementById('security-modal-backdrop');
             securityModal.style.opacity = '0';
             setTimeout(() => securityModal.style.display = 'none', 500);
 
-            loadFiltersFromLocalStorage(); // Load UI state for filters first
-
-            // Load data from local storage
-            const storedData = localStorage.getItem('farmData');
-            if (storedData) {
-                const parsedData = JSON.parse(storedData);
-                
-                // Capture the fresh configuration from the current code before merging
-                const freshConfig = { ...window.farmData };
-
-                // Merge stored data to retrieve user records
-                window.farmData = { ...window.farmData, ...parsedData };
-
-                // Restore configuration lists from the fresh code to ensure updates apply
-                // This prevents old configuration in localStorage from hiding new features
-                const configKeys = [
-                    'livestockTypes', 'productionTypes', 'transactionCategories', 
-                    'taskPriorities', 'taskStatuses', 'inventoryCategories', 
-                    'animalSpecies', 'breedingStatuses', 'milkingTimes', 'gestationDays'
-                ];
-
-                configKeys.forEach(key => {
-                    if (freshConfig[key]) {
-                        window.farmData[key] = freshConfig[key];
-                    }
-                });
-            } else {
-                // If no data, save the initial empty structure
-                saveData();
-            }
-
-
-            isAuthReady = true;
-            updateUserProfileUI();
-
-            renderAllViews();
-            changeView('dashboard');
-
-            setTimeout(showApp, 1500);
+            setTimeout(showApp, 500);
         }
 
         function renderAllViews() {
@@ -1974,7 +2147,10 @@
                         <form id="add-animal-form" onsubmit="event.preventDefault(); handleAddAnimal();">
                             <div class="mb-4">
                                 <label for="animal-id" class="block text-sm font-medium text-gray-700 mb-1">Unique Animal ID</label>
-                                <input type="text" id="animal-id" required placeholder="e.g., Cattle-101, Goat-54" class="input-focus w-full p-3 border border-gray-300 rounded-lg">
+                                <div class="flex gap-2">
+                                    <input type="text" id="animal-id" required placeholder="e.g., Cattle-101, Goat-54" class="input-focus w-full p-3 border border-gray-300 rounded-lg">
+                                    <button type="button" onclick="const val = document.getElementById('animal-id').value; if(val) addAnimalTag(val);" class="bg-gray-100 hover:bg-gray-200 text-gray-600 border border-gray-300 px-3 rounded-lg text-sm font-medium transition" title="Add ID as a Tag">Tag ID</button>
+                                </div>
                             </div>
                             <div class="mb-4">
                                 <label for="animal-species" class="block text-sm font-medium text-gray-700 mb-1">Species</label>
@@ -2055,7 +2231,7 @@
             const animalId = document.getElementById('animal-id').value.trim();
             const species = document.getElementById('animal-species').value;
             const birthDate = document.getElementById('animal-birth-date').value;
-            const tags = document.getElementById('animal-tags-input').value.split(',').filter(t => t); // Filter out empty strings
+            let tags = document.getElementById('animal-tags-input').value.split(',').filter(t => t); // Filter out empty strings
             const msgEl = document.getElementById('animal-msg');
 
             if (!animalId || !species || !birthDate) {
@@ -2071,6 +2247,11 @@
                 return;
             }
 
+            // Auto-generate tag from Animal ID if not already present
+            if (animalId && !tags.includes(animalId)) {
+                tags.unshift(animalId);
+            }
+
             const record = {
                 id: Date.now().toString(),
                 animalId,
@@ -2080,7 +2261,7 @@
             };
 
             farmData.animals.push(record);
-            saveData();
+            saveCollection('animals');
             generateAndRenderNotifications();
             renderAnimalHub('animals'); // Re-render the view
 
@@ -4020,7 +4201,7 @@
             record.id = Date.now().toString(); // Assign a local unique ID
             farmData.livestock.push(record);
             farmData.livestock.sort((a, b) => new Date(b.date) - new Date(a.date));
-            saveData();
+            saveCollection('livestock');
             generateAndRenderNotifications();
             changeView('livestock');
             renderDashboard(farmData.livestock, farmData.transactions, farmData.production, farmData.tasks, farmData.inventory); // Also update dashboard
@@ -4061,7 +4242,7 @@
             record.id = Date.now().toString(); // Assign a local unique ID
             farmData.transactions.push(record);
             farmData.transactions.sort((a, b) => new Date(b.date) - new Date(a.date));
-            saveData();
+            saveCollection('transactions');
             generateAndRenderNotifications();
             changeView('finance');
             renderDashboard(farmData.livestock, farmData.transactions, farmData.production, farmData.tasks, farmData.inventory); // Also update dashboard
@@ -4099,7 +4280,7 @@
             record.id = Date.now().toString(); // Assign a local unique ID
             farmData.production.push(record);
             farmData.production.sort((a, b) => new Date(b.date) - new Date(a.date));
-            saveData();
+            saveCollection('production');
             generateAndRenderNotifications();
             changeView('production');
             renderDashboard(farmData.livestock, farmData.transactions, farmData.production, farmData.tasks, farmData.inventory); // Also update dashboard
@@ -4138,7 +4319,7 @@
             
             record.id = Date.now().toString(); // Assign a local unique ID
             farmData.tasks.push(record);
-            saveData();
+            saveCollection('tasks');
             generateAndRenderNotifications();
             changeView('tasks');
             renderDashboard(farmData.livestock, farmData.transactions, farmData.production, farmData.tasks, farmData.inventory); // Also update dashboard
@@ -4181,7 +4362,7 @@
             
             record.id = Date.now().toString(); // Assign a local unique ID
             farmData.inventory.push(record);
-            saveData();
+            saveCollection('inventory');
             generateAndRenderNotifications();
             changeView('inventory');
             renderDashboard(farmData.livestock, farmData.transactions, farmData.production, farmData.tasks, farmData.inventory); // Also update dashboard
@@ -4214,7 +4395,7 @@
 
             record.id = Date.now().toString();
             farmData.journal.push(record);
-            saveData();
+            saveCollection('journal');
             generateAndRenderNotifications();
             changeView('journal');
             msgEl.textContent = 'Journal entry saved!';
@@ -4255,23 +4436,27 @@
             }
         }
 
-        window.handleUpdateProfile = function() {
+        window.handleUpdateProfile = async function() {
             const displayName = document.getElementById('display-name').value.trim();
-            const email = document.getElementById('profile-email').value.trim();
-            const imgPreview = document.getElementById('profile-preview').src;
-            const msgEl = document.getElementById('profile-msg');
+            const imgPreview  = document.getElementById('profile-preview').src;
+            const msgEl       = document.getElementById('profile-msg');
 
-            owner.displayName = displayName;
-            owner.email = email;
+            msgEl.textContent = 'Saving...';
+            msgEl.className   = 'text-center mt-4 text-sm font-medium text-gray-500';
+
+            const profileUpdate = { display_name: displayName };
             if (imgPreview.startsWith('data:image')) {
+                profileUpdate.profile_pic = imgPreview;
                 owner.profilePic = imgPreview;
             }
 
-            localStorage.setItem('farmOwner', JSON.stringify(owner));
+            owner.displayName = displayName;
+            owner.userId      = displayName;
+            await sbUpsertProfile(profileUpdate);
             updateUserProfileUI();
 
             msgEl.textContent = 'Profile updated successfully!';
-            msgEl.className = 'text-center mt-4 text-sm font-medium text-green-600';
+            msgEl.className   = 'text-center mt-4 text-sm font-medium text-green-600';
             setTimeout(() => msgEl.textContent = '', 3000);
         }
 
@@ -4325,8 +4510,8 @@
                                     <label for="display-name" class="block text-sm font-medium text-gray-700 mb-1">Display Name</label>
                                     <input type="text" id="display-name" placeholder="e.g. Farm Owner" class="input-focus w-full p-3 border border-gray-300 rounded-lg" value="${owner.displayName || ''}">
                                     
-                                    <label for="profile-email" class="block text-sm font-medium text-gray-700 mt-3 mb-1">Recovery Email</label>
-                                    <input type="email" id="profile-email" placeholder="your@email.com" class="input-focus w-full p-3 border border-gray-300 rounded-lg" value="${owner.email || ''}">
+                                    <label for="profile-email" class="block text-sm font-medium text-gray-700 mt-3 mb-1">Email (read-only)</label>
+                                    <input type="email" id="profile-email" disabled class="w-full p-3 border border-gray-200 rounded-lg bg-gray-50 text-gray-500" value="${owner.email || ''}">
                                     
                                     <p class="text-xs text-gray-500 mt-1">This name will appear in the dashboard header.</p>
                                 </div>
@@ -4397,10 +4582,6 @@
                         <h3 class="text-xl font-bold mb-5 border-b pb-3 text-gray-800">Change Your Password</h3>
                         <form id="change-password-form" onsubmit="event.preventDefault(); handleChangePassword();">
                             <div class="mb-4">
-                                <label for="current-password" class="block text-sm font-medium text-gray-700 mb-1">Current Password</label>
-                                <input type="password" id="current-password" required placeholder="Enter your current password" class="input-focus w-full p-3 border border-gray-300 rounded-lg">
-                            </div>
-                            <div class="mb-4">
                                 <label for="new-password" class="block text-sm font-medium text-gray-700 mb-1">New Password</label>
                                 <input type="password" id="new-password" required placeholder="Enter a new strong password" class="input-focus w-full p-3 border border-gray-300 rounded-lg">
                             </div>
@@ -4438,7 +4619,7 @@
         /**
          * Handles updating the farm settings from the Settings page.
          */
-        window.handleUpdateFarmSettings = function() {
+        window.handleUpdateFarmSettings = async function() {
             const newFarmName = document.getElementById('farm-name').value.trim();
             const msgEl = document.getElementById('farm-settings-msg');
 
@@ -4448,30 +4629,26 @@
                 return;
             }
 
+            msgEl.textContent = 'Saving...';
+            msgEl.className = 'text-center mt-4 text-sm font-medium text-gray-500';
+
             farmData.farmName = newFarmName;
-            saveData();
+            await sbUpsertProfile({ farm_name: newFarmName });
+            localStorage.setItem('farmData', JSON.stringify(window.farmData));
+
             msgEl.textContent = 'Farm settings updated successfully!';
             msgEl.className = 'text-center mt-4 text-sm font-medium text-green-600';
-            // No longer need to reload the page
-            setTimeout(() => {
-                msgEl.textContent = '';
-            }, 3000);
+            setTimeout(() => { msgEl.textContent = ''; }, 3000);
         };
 
         /**
-         * Handles the password change request from the Settings page.
+         * Handles the password change request from the Settings page — via Supabase Auth.
          */
-        window.handleChangePassword = function() {
-            const currentPass = document.getElementById('current-password').value;
-            const newPass = document.getElementById('new-password').value;
+        window.handleChangePassword = async function() {
+            const newPass        = document.getElementById('new-password').value;
             const confirmNewPass = document.getElementById('confirm-new-password').value;
-            const msgEl = document.getElementById('password-msg');
+            const msgEl          = document.getElementById('password-msg');
 
-            if (currentPass !== owner.password) {
-                msgEl.textContent = 'Current password is incorrect.';
-                msgEl.className = 'text-center mt-4 text-sm font-medium text-red-500';
-                return;
-            }
             if (newPass.length < 6) {
                 msgEl.textContent = 'New password must be at least 6 characters long.';
                 msgEl.className = 'text-center mt-4 text-sm font-medium text-red-500';
@@ -4483,12 +4660,25 @@
                 return;
             }
 
-            owner.password = newPass;
-            localStorage.setItem('farmOwner', JSON.stringify(owner));
+            msgEl.textContent = 'Updating...';
+            msgEl.className = 'text-center mt-4 text-sm font-medium text-gray-500';
 
-            msgEl.textContent = 'Password updated successfully! It will be used the next time you log in.';
-            msgEl.className = 'text-center mt-4 text-sm font-medium text-green-600';
-            document.getElementById('change-password-form').reset();
+            // Supabase Auth: update password via PATCH /auth/v1/user
+            const r = await fetch(`${SUPABASE_URL}/auth/v1/user`, {
+                method: 'PUT',
+                headers: sbHeaders(),
+                body: JSON.stringify({ password: newPass })
+            });
+            const result = await r.json();
+
+            if (result.error) {
+                msgEl.textContent = result.error.message || 'Password update failed.';
+                msgEl.className = 'text-center mt-4 text-sm font-medium text-red-500';
+            } else {
+                msgEl.textContent = 'Password updated successfully!';
+                msgEl.className = 'text-center mt-4 text-sm font-medium text-green-600';
+                document.getElementById('change-password-form').reset();
+            }
         }
 
         // --- DELETE MODAL HANDLERS ---
@@ -4525,7 +4715,10 @@
             window.closeModal('delete');
             
             farmData[collectionName] = farmData[collectionName].filter(item => item.id !== id);
-            saveData();
+            localStorage.setItem('farmData', JSON.stringify(window.farmData));
+            // Delete from Supabase
+            sbDelete(collectionName, id);
+
             generateAndRenderNotifications();
             renderDashboard(farmData.livestock, farmData.transactions, farmData.production, farmData.tasks, farmData.inventory);
             
@@ -4540,7 +4733,7 @@
             } else if (collectionName === 'equipment') {
                 renderEquipment(farmData.equipment);
             } else {
-                window.changeView(collectionName); // Re-render the current view to show deletion
+                window.changeView(collectionName);
             }
         }
 
@@ -4621,7 +4814,8 @@
             };
             farmData.transactions.push(transaction);
 
-            saveData();
+            saveCollection('livestock');
+            saveCollection('transactions');
             generateAndRenderNotifications();
             renderLivestock(farmData.livestock); // Re-render the livestock view
             renderDashboard(farmData.livestock, farmData.transactions, farmData.production, farmData.tasks, farmData.inventory);
@@ -4687,7 +4881,8 @@
             const transaction = { id: Date.now().toString(), type: 'expense', category: 'Livestock Purchase', amount: amount, date: date, notes: `Purchase of ${quantity} ${record.type}` };
             farmData.transactions.push(transaction);
 
-            saveData();
+            saveCollection('livestock');
+            saveCollection('transactions');
             generateAndRenderNotifications();
             renderLivestock(farmData.livestock);
             renderDashboard(farmData.livestock, farmData.transactions, farmData.production, farmData.tasks, farmData.inventory);
@@ -5042,7 +5237,8 @@
                 if (isValid) {
                     // Update local data
                     Object.assign(record, updatedRecord);
-                    saveData();
+                    localStorage.setItem('farmData', JSON.stringify(window.farmData));
+                    sbUpsert(collectionName, record); // Sync single updated record
                     generateAndRenderNotifications();
                     renderDashboard(farmData.livestock, farmData.transactions, farmData.production, farmData.tasks, farmData.inventory);
 
@@ -5082,7 +5278,8 @@
                     record.status = newStatus; // Optimistic update
                     changeView('tasks');
 
-                    saveData();
+                    localStorage.setItem('farmData', JSON.stringify(window.farmData));
+                    sbUpsert('tasks', record);
                     generateAndRenderNotifications();
                     renderDashboard(farmData.livestock, farmData.transactions, farmData.production, farmData.tasks, farmData.inventory);
                 } catch (error) {
