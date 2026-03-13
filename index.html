@@ -459,27 +459,20 @@
          */
         async function sbUpsert(collection, record) {
             const userId = _currentUserId;
-            if (!userId) { console.warn('sbUpsert: no user id, skipping', collection); return; }
-            if (!record || !record.id) { console.warn('sbUpsert: record missing id, skipping', collection, record); return; }
-            if (!_sbAccessToken) { console.warn('sbUpsert: no access token, skipping', collection); return; }
             const body = {
                 user_id: userId,
                 collection,
-                record_id: String(record.id),
+                record_id: record.id,
                 data: record
             };
-            try {
-                const r = await fetch(`${SUPABASE_URL}/rest/v1/farm_data`, {
-                    method: 'POST',
-                    headers: { ...sbHeaders(), 'Prefer': 'resolution=merge-duplicates,return=representation' },
-                    body: JSON.stringify(body)
-                });
-                if (!r.ok) {
-                    const err = await r.text();
-                    console.error('sbUpsert error:', collection, err);
-                }
-            } catch(e) {
-                console.error('sbUpsert network error:', collection, e);
+            const r = await fetch(`${SUPABASE_URL}/rest/v1/farm_data`, {
+                method: 'POST',
+                headers: { ...sbHeaders(), 'Prefer': 'resolution=merge-duplicates,return=representation' },
+                body: JSON.stringify(body)
+            });
+            if (!r.ok) {
+                const err = await r.text();
+                console.error('sbUpsert error:', err);
             }
         }
 
@@ -536,6 +529,47 @@
                 body: JSON.stringify({ user_id: userId, ...profileData })
             });
             if (!r.ok) console.error('sbUpsertProfile error:', await r.text());
+        }
+
+        /** Save the user's customised config (types, categories, species, etc.) to Supabase */
+        async function sbSaveConfig() {
+            if (!_sbAccessToken || !_currentUserId) return;
+            const configKeys = [
+                'livestockTypes','productionTypes','transactionCategories',
+                'taskPriorities','taskStatuses','inventoryCategories',
+                'animalSpecies','breedingStatuses','milkingTimes','gestationDays','animalTags',
+                'farmName'
+            ];
+            const configData = {};
+            configKeys.forEach(k => { configData[k] = window.farmData[k]; });
+            const body = {
+                user_id: _currentUserId,
+                collection: 'app_config',
+                record_id: 'config',
+                data: configData
+            };
+            try {
+                const r = await fetch(`${SUPABASE_URL}/rest/v1/farm_data`, {
+                    method: 'POST',
+                    headers: { ...sbHeaders(), 'Prefer': 'resolution=merge-duplicates,return=representation' },
+                    body: JSON.stringify(body)
+                });
+                if (!r.ok) console.error('sbSaveConfig error:', await r.text());
+            } catch(e) { console.error('sbSaveConfig network error:', e); }
+        }
+
+        /** Load user's customised config from Supabase */
+        async function sbLoadConfig() {
+            if (!_sbAccessToken || !_currentUserId) return null;
+            try {
+                const r = await fetch(
+                    `${SUPABASE_URL}/rest/v1/farm_data?user_id=eq.${_currentUserId}&collection=eq.app_config&record_id=eq.config&select=data`,
+                    { headers: sbHeaders() }
+                );
+                if (!r.ok) return null;
+                const rows = await r.json();
+                return (Array.isArray(rows) && rows.length > 0) ? rows[0].data : null;
+            } catch(e) { console.warn('sbLoadConfig error:', e); return null; }
         }
 
         /** RPC: delete the current user's account */
@@ -596,11 +630,6 @@
         async function saveCollection(collection) {
             const records = window.farmData[collection];
             if (!Array.isArray(records)) return;
-            if (!_sbAccessToken) {
-                // Not logged in — only update local cache
-                localStorage.setItem('farmData', JSON.stringify(window.farmData));
-                return;
-            }
             // Upsert each record (Supabase handles insert-or-update)
             const promises = records.map(rec => sbUpsert(collection, rec));
             await Promise.all(promises);
@@ -797,14 +826,6 @@
          * Logs the user out via Supabase and reloads.
          */
         async function handleLogout() {
-            // Flush any pending saves to Supabase before clearing the token
-            try {
-                const dataKeys = [
-                    'livestock','transactions','production','tasks','inventory',
-                    'animals','breeding','health','equipment','journal','milkProduction'
-                ];
-                await Promise.all(dataKeys.map(col => saveCollection(col)));
-            } catch(e) { console.warn('Pre-logout sync error:', e); }
             await sbSignOut();
             localStorage.removeItem('sb_refresh');
             localStorage.removeItem('sb_user_id');
@@ -1638,12 +1659,6 @@
             await migrateLocalStorageToSupabase();
             if (loadMsg) loadMsg.textContent = 'Loading your farm data...';
 
-            const freshConfig = { ...window.farmData };
-            const configKeys = [
-                'livestockTypes','productionTypes','transactionCategories',
-                'taskPriorities','taskStatuses','inventoryCategories',
-                'animalSpecies','breedingStatuses','milkingTimes','gestationDays','animalTags'
-            ];
             const dataKeys = [
                 'livestock','transactions','production','tasks','inventory',
                 'animals','breeding','health','equipment','journal','milkProduction'
@@ -1665,9 +1680,20 @@
                 } catch(e2) {}
             }
 
-            // Restore config keys from fresh code
-            configKeys.forEach(key => { if (freshConfig[key]) window.farmData[key] = freshConfig[key]; });
-            window.farmData.farmName = farmName || window.farmData.farmName;
+            // Load user's saved config from Supabase (types, categories, species, etc.)
+            // Fall back to hardcoded defaults only if no cloud config exists yet.
+            const savedConfig = await sbLoadConfig();
+            if (savedConfig) {
+                const configKeys = [
+                    'livestockTypes','productionTypes','transactionCategories',
+                    'taskPriorities','taskStatuses','inventoryCategories',
+                    'animalSpecies','breedingStatuses','milkingTimes','gestationDays','animalTags'
+                ];
+                configKeys.forEach(key => {
+                    if (savedConfig[key] !== undefined) window.farmData[key] = savedConfig[key];
+                });
+            }
+            window.farmData.farmName = farmName || (savedConfig && savedConfig.farmName) || window.farmData.farmName;
 
             try { localStorage.setItem('farmData', JSON.stringify(window.farmData)); } catch(e) {}
 
@@ -4698,6 +4724,68 @@
             authStatus.classList.remove('text-gray-500');
         }
 
+        // ============================================================
+        // CUSTOMISE LISTS — handlers for adding/removing config items
+        // ============================================================
+
+        /** Generic: add an item to a simple array config list */
+        window.handleAddConfigItem = async function(listKey, inputId, msgId) {
+            const input = document.getElementById(inputId);
+            const msgEl = document.getElementById(msgId);
+            const val = input.value.trim();
+            if (!val) { msgEl.textContent = 'Please enter a value.'; msgEl.className = 'text-xs text-red-500'; return; }
+            const list = window.farmData[listKey];
+            if (!Array.isArray(list)) return;
+            if (list.map(v => v.toLowerCase()).includes(val.toLowerCase())) {
+                msgEl.textContent = 'Already exists.'; msgEl.className = 'text-xs text-red-500'; return;
+            }
+            list.push(val);
+            input.value = '';
+            await sbSaveConfig();
+            localStorage.setItem('farmData', JSON.stringify(window.farmData));
+            msgEl.textContent = '✓ Added'; msgEl.className = 'text-xs text-green-600';
+            setTimeout(() => renderSettings(), 300);
+        };
+
+        /** Generic: remove an item from a simple array config list */
+        window.handleRemoveConfigItem = async function(listKey, val) {
+            const list = window.farmData[listKey];
+            if (!Array.isArray(list)) return;
+            window.farmData[listKey] = list.filter(v => v !== val);
+            await sbSaveConfig();
+            localStorage.setItem('farmData', JSON.stringify(window.farmData));
+            renderSettings();
+        };
+
+        /** Add an income or expense transaction category */
+        window.handleAddTransactionCategory = async function(type, inputId, msgId) {
+            const input = document.getElementById(inputId);
+            const msgEl = document.getElementById(msgId);
+            const val = input.value.trim();
+            if (!val) { msgEl.textContent = 'Please enter a value.'; msgEl.className = 'text-xs text-red-500'; return; }
+            const cats = window.farmData.transactionCategories;
+            if (!cats[type]) cats[type] = [];
+            if (cats[type].map(v => v.toLowerCase()).includes(val.toLowerCase())) {
+                msgEl.textContent = 'Already exists.'; msgEl.className = 'text-xs text-red-500'; return;
+            }
+            cats[type].push(val);
+            input.value = '';
+            await sbSaveConfig();
+            localStorage.setItem('farmData', JSON.stringify(window.farmData));
+            msgEl.textContent = '✓ Added'; msgEl.className = 'text-xs text-green-600';
+            setTimeout(() => renderSettings(), 300);
+        };
+
+        /** Remove an income or expense transaction category */
+        window.handleRemoveTransactionCategory = async function(type, val) {
+            const cats = window.farmData.transactionCategories;
+            if (!cats[type]) return;
+            cats[type] = cats[type].filter(v => v !== val);
+            await sbSaveConfig();
+            localStorage.setItem('farmData', JSON.stringify(window.farmData));
+            renderSettings();
+        };
+
         /**
          * Renders the Settings page.
          */
@@ -4831,6 +4919,58 @@
                         ${userManagementHtml}
                     </div>
 
+                    <!-- Customise Lists -->
+                    <div class="bg-card-bg p-8 rounded-2xl shadow-lg border border-gray-200/80">
+                        <h3 class="text-xl font-bold mb-1 text-gray-800">Customise Lists</h3>
+                        <p class="text-sm text-gray-500 mb-6">Add or remove options that appear in dropdowns across the app. Changes are saved to the cloud.</p>
+
+                        ${[
+                            { key: 'livestockTypes',     label: 'Livestock Types',     inputId: 'cfg-livestock',   msgId: 'cfg-livestock-msg'   },
+                            { key: 'productionTypes',    label: 'Production Types',    inputId: 'cfg-production',  msgId: 'cfg-production-msg'  },
+                            { key: 'taskStatuses',       label: 'Task Statuses',       inputId: 'cfg-taskstatus',  msgId: 'cfg-taskstatus-msg'  },
+                            { key: 'inventoryCategories',label: 'Inventory Categories',inputId: 'cfg-inventory',   msgId: 'cfg-inventory-msg'   },
+                            { key: 'animalSpecies',      label: 'Animal Species',      inputId: 'cfg-species',     msgId: 'cfg-species-msg'     },
+                            { key: 'breedingStatuses',   label: 'Breeding Statuses',   inputId: 'cfg-breeding',    msgId: 'cfg-breeding-msg'    },
+                        ].map(({ key, label, inputId, msgId }) => `
+                            <div class="mb-6">
+                                <h4 class="text-sm font-semibold text-gray-700 mb-2">${label}</h4>
+                                <div class="flex flex-wrap gap-2 mb-2">
+                                    ${(farmData[key] || []).map(v => `
+                                        <span class="inline-flex items-center gap-1 px-2 py-1 bg-green-50 border border-green-200 rounded-full text-xs text-gray-700">
+                                            ${v}
+                                            <button type="button" onclick="handleRemoveConfigItem('${key}', ${JSON.stringify(v)})" class="text-gray-400 hover:text-red-500 font-bold leading-none ml-1" title="Remove">×</button>
+                                        </span>
+                                    `).join('')}
+                                </div>
+                                <div class="flex gap-2 items-center">
+                                    <input type="text" id="${inputId}" placeholder="Add new…" class="input-focus flex-grow p-2 border border-gray-300 rounded-lg text-sm">
+                                    <button type="button" onclick="handleAddConfigItem('${key}', '${inputId}', '${msgId}')" class="px-4 py-2 bg-primary-green text-white text-sm font-semibold rounded-lg hover:bg-primary-green-dark transition flex-shrink-0">Add</button>
+                                </div>
+                                <p id="${msgId}" class="text-xs mt-1 h-4"></p>
+                            </div>
+                        `).join('')}
+
+                        <!-- Transaction Categories (Income / Expense separately) -->
+                        ${['income','expense'].map(type => `
+                            <div class="mb-6">
+                                <h4 class="text-sm font-semibold text-gray-700 mb-2 capitalize">${type} Categories</h4>
+                                <div class="flex flex-wrap gap-2 mb-2">
+                                    ${((farmData.transactionCategories || {})[type] || []).map(v => `
+                                        <span class="inline-flex items-center gap-1 px-2 py-1 bg-green-50 border border-green-200 rounded-full text-xs text-gray-700">
+                                            ${v}
+                                            <button type="button" onclick="handleRemoveTransactionCategory('${type}', ${JSON.stringify(v)})" class="text-gray-400 hover:text-red-500 font-bold leading-none ml-1" title="Remove">×</button>
+                                        </span>
+                                    `).join('')}
+                                </div>
+                                <div class="flex gap-2 items-center">
+                                    <input type="text" id="cfg-txn-${type}" placeholder="Add new…" class="input-focus flex-grow p-2 border border-gray-300 rounded-lg text-sm">
+                                    <button type="button" onclick="handleAddTransactionCategory('${type}', 'cfg-txn-${type}', 'cfg-txn-${type}-msg')" class="px-4 py-2 bg-primary-green text-white text-sm font-semibold rounded-lg hover:bg-primary-green-dark transition flex-shrink-0">Add</button>
+                                </div>
+                                <p id="cfg-txn-${type}-msg" class="text-xs mt-1 h-4"></p>
+                            </div>
+                        `).join('')}
+                    </div>
+
                     <!-- Danger Zone -->
                     <div class="bg-red-50 p-8 rounded-2xl shadow-lg border-2 border-red-200/80 mt-10">
                         <h3 class="text-xl font-bold mb-3 text-red-800">Danger Zone</h3>
@@ -4858,7 +4998,10 @@
             msgEl.className = 'text-center mt-4 text-sm font-medium text-gray-500';
 
             farmData.farmName = newFarmName;
-            await sbUpsertProfile({ farm_name: newFarmName });
+            await Promise.all([
+                sbUpsertProfile({ farm_name: newFarmName }),
+                sbSaveConfig()
+            ]);
             localStorage.setItem('farmData', JSON.stringify(window.farmData));
 
             msgEl.textContent = 'Farm settings updated successfully!';
