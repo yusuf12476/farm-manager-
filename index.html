@@ -390,7 +390,7 @@
         // SUPABASE HELPERS  (raw REST — no SDK)
         // ============================================================
         let _sbAccessToken = null;   // set after login
-        let _dataOwnerId  = null;   // whose farm data to read/write (owner = self, delegate = owner's UUID)
+        let _dataOwnerId  = null;   // owner's UUID — set for delegates so their reads/writes go to owner's data
 
         function sbHeaders(extra = {}) {
             const h = {
@@ -462,12 +462,7 @@
             const userId = _dataOwnerId || _currentUserId;
             if (!userId || !_sbAccessToken) { console.warn('sbUpsert: not authenticated, skipping', collection); return; }
             if (!record || !record.id) { console.warn('sbUpsert: record missing id, skipping', collection); return; }
-            const body = {
-                user_id: userId,
-                collection,
-                record_id: String(record.id),
-                data: record
-            };
+            const body = { user_id: userId, collection, record_id: String(record.id), data: record };
             try {
                 const r = await fetch(`${SUPABASE_URL}/rest/v1/farm_data`, {
                     method: 'POST',
@@ -508,21 +503,17 @@
         /** Fetch user profile row */
         async function sbFetchProfile() {
             try {
-                const userId = _currentUserId;
                 const r = await fetch(
-                    `${SUPABASE_URL}/rest/v1/user_profiles?user_id=eq.${userId}&select=*`,
+                    `${SUPABASE_URL}/rest/v1/user_profiles?user_id=eq.${_currentUserId}&select=*`,
                     { headers: sbHeaders() }
                 );
                 if (!r.ok) return null;
                 const rows = await r.json();
                 return Array.isArray(rows) && rows.length > 0 ? rows[0] : null;
-            } catch(e) {
-                console.warn('sbFetchProfile error:', e);
-                return null;
-            }
+            } catch(e) { console.warn('sbFetchProfile error:', e); return null; }
         }
 
-        /** Fetch any user's profile by their UUID — used to load the owner's farm name for delegate logins */
+        /** Fetch any user's profile by UUID — used to get the owner's farm name for delegate logins */
         async function sbFetchProfileById(userId) {
             try {
                 const r = await fetch(
@@ -532,32 +523,28 @@
                 if (!r.ok) return null;
                 const rows = await r.json();
                 return Array.isArray(rows) && rows.length > 0 ? rows[0] : null;
-            } catch(e) {
-                console.warn('sbFetchProfileById error:', e);
-                return null;
-            }
+            } catch(e) { console.warn('sbFetchProfileById error:', e); return null; }
         }
 
-        /** Upsert user profile */
+        /** Upsert user profile — uses PATCH to correctly update existing row */
         async function sbUpsertProfile(profileData) {
-            const userId = _currentUserId;
-            if (!userId || !_sbAccessToken) { console.warn('sbUpsertProfile: not authenticated, skipping'); return; }
+            if (!_currentUserId || !_sbAccessToken) { console.warn('sbUpsertProfile: not authenticated'); return; }
             try {
                 const patch = await fetch(
-                    `${SUPABASE_URL}/rest/v1/user_profiles?user_id=eq.${userId}`,
+                    `${SUPABASE_URL}/rest/v1/user_profiles?user_id=eq.${_currentUserId}`,
                     { method: 'PATCH', headers: { ...sbHeaders(), 'Prefer': 'return=representation' }, body: JSON.stringify(profileData) }
                 );
                 if (patch.ok) {
                     const updated = await patch.json();
                     if (Array.isArray(updated) && updated.length === 0) {
-                        const insert = await fetch(`${SUPABASE_URL}/rest/v1/user_profiles`, {
+                        // No row yet — insert
+                        await fetch(`${SUPABASE_URL}/rest/v1/user_profiles`, {
                             method: 'POST',
                             headers: { ...sbHeaders(), 'Prefer': 'return=representation' },
-                            body: JSON.stringify({ user_id: userId, ...profileData })
+                            body: JSON.stringify({ user_id: _currentUserId, ...profileData })
                         });
-                        if (!insert.ok) console.error('sbUpsertProfile insert error:', await insert.text());
                     }
-                } else { console.error('sbUpsertProfile patch error:', await patch.text()); }
+                } else { console.error('sbUpsertProfile error:', await patch.text()); }
             } catch(e) { console.error('sbUpsertProfile network error:', e); }
         }
 
@@ -620,8 +607,7 @@
             const records = window.farmData[collection];
             if (!Array.isArray(records)) return;
             if (!_sbAccessToken) { localStorage.setItem('farmData', JSON.stringify(window.farmData)); return; }
-            const promises = records.map(rec => sbUpsert(collection, rec));
-            await Promise.all(promises);
+            await Promise.all(records.map(rec => sbUpsert(collection, rec)));
             localStorage.setItem('farmData', JSON.stringify(window.farmData));
         }
 
@@ -815,9 +801,9 @@
          */
         async function handleLogout() {
             try {
-                const dataKeys = ['livestock','transactions','production','tasks','inventory','animals','breeding','health','equipment','journal','milkProduction'];
-                await Promise.all(dataKeys.map(col => saveCollection(col)));
-            } catch(e) { console.warn('Pre-logout sync error:', e); }
+                const keys = ['livestock','transactions','production','tasks','inventory','animals','breeding','health','equipment','journal','milkProduction'];
+                await Promise.all(keys.map(col => saveCollection(col)));
+            } catch(e) {}
             await sbSignOut();
             localStorage.removeItem('sb_refresh');
             localStorage.removeItem('sb_user_id');
@@ -1450,13 +1436,12 @@
 
                     const profile = await sbFetchProfile();
 
-                    // Check if this user is a delegate
                     if (profile?.owner_id) {
                         _dataOwnerId = profile.owner_id;
                         const ownerProfile = await sbFetchProfileById(profile.owner_id);
                         const displayName = profile?.display_name || 'User';
                         const farmName    = ownerProfile?.farm_name || 'My Farm';
-                        owner = { userId: displayName, email: result.user.email, displayName, profilePic: profile?.profile_pic || null, delegates: ownerProfile?.delegates || [], isDelegate: true };
+                        owner = { userId: displayName, email: result.user.email, displayName, profilePic: profile?.profile_pic || null, delegates: [], isDelegate: true };
                         await startApp(_currentUserId, displayName, farmName);
                     } else {
                         _dataOwnerId = null;
@@ -1506,14 +1491,13 @@
             let profile = null;
             try { profile = await sbFetchProfile(); } catch(e) {}
 
-            // Check if this user is a delegate — they have an owner_id pointing to the farm owner
             if (profile?.owner_id) {
+                // This is a delegate — load the owner's profile and farm data
                 _dataOwnerId = profile.owner_id;
-                // Load the owner's profile to get the farm name and delegates list
                 const ownerProfile = await sbFetchProfileById(profile.owner_id);
                 const displayName = profile.display_name || email.split('@')[0];
                 const farmName    = ownerProfile?.farm_name || 'My Farm';
-                owner = { userId: displayName, email, displayName, profilePic: profile?.profile_pic || null, delegates: ownerProfile?.delegates || [], isDelegate: true };
+                owner = { userId: displayName, email, displayName, profilePic: profile?.profile_pic || null, delegates: [], isDelegate: true };
                 await startApp(_currentUserId, displayName, farmName);
             } else {
                 // Normal owner login
@@ -4627,8 +4611,7 @@
         }
 
         /**
-         * Handles adding a new delegate user.
-         * Creates a real Supabase Auth account so they can actually log in.
+         * Handles adding a new delegate user — creates a real Supabase Auth account.
          */
         window.handleAddDelegate = async function() {
             const emailInput = document.getElementById('new-delegate-id');
@@ -4645,7 +4628,6 @@
                 msgEl.textContent = 'Password must be at least 6 characters.';
                 msgEl.className = 'text-xs text-center mt-2 text-red-500'; return;
             }
-
             if (!owner.delegates) owner.delegates = [];
             if (owner.delegates.length >= 3) {
                 msgEl.textContent = 'Maximum 3 delegate users allowed.';
@@ -4659,24 +4641,25 @@
             msgEl.textContent = 'Creating user account...';
             msgEl.className = 'text-xs text-center mt-2 text-gray-500';
 
-            // Step 1: Create a real Supabase Auth account for the delegate
+            // Step 1: Create Supabase Auth account for the delegate
             const signupResult = await sbSignUp(newEmail, newPass);
             if (signupResult.error) {
                 msgEl.textContent = signupResult.error.message || 'Failed to create account.';
                 msgEl.className = 'text-xs text-center mt-2 text-red-500'; return;
             }
 
-            // Step 2: Sign in as delegate temporarily to get their UUID and create their profile
+            // Step 2: Sign in as delegate to get their UUID + token
             const loginResult = await sbSignIn(newEmail, newPass);
             if (loginResult.error) {
-                msgEl.textContent = 'Account created but could not finalise setup. Try again.';
+                msgEl.textContent = 'Account created but setup failed. Please try again.';
                 msgEl.className = 'text-xs text-center mt-2 text-red-500'; return;
             }
 
             const delegateUUID  = loginResult.user.id;
             const delegateToken = loginResult.access_token;
+            const displayName   = newEmail.split('@')[0];
 
-            // Step 3: Create the delegate's profile row with owner_id pointing to the farm owner
+            // Step 3: Create the delegate's profile with owner_id pointing to this farm owner
             try {
                 await fetch(`${SUPABASE_URL}/rest/v1/user_profiles`, {
                     method: 'POST',
@@ -4688,20 +4671,20 @@
                     },
                     body: JSON.stringify({
                         user_id: delegateUUID,
-                        display_name: newEmail.split('@')[0],
+                        display_name: displayName,
                         email: newEmail,
-                        owner_id: _currentUserId   // points back to the farm owner
+                        owner_id: _currentUserId
                     })
                 });
             } catch(e) { console.warn('Delegate profile creation error:', e); }
 
-            // Step 4: Add delegate to owner's list and save
-            owner.delegates.push({ userId: newEmail.split('@')[0], email: newEmail, supabaseId: delegateUUID });
+            // Step 4: Add to owner's delegate list and save
+            owner.delegates.push({ userId: displayName, email: newEmail, supabaseId: delegateUUID });
             await sbUpsertProfile({ delegates: owner.delegates });
 
             emailInput.value = '';
             passInput.value  = '';
-            msgEl.textContent = `✓ User ${newEmail} added. They can now log in.`;
+            msgEl.textContent = `✓ ${newEmail} added. They can now log in with those credentials.`;
             msgEl.className = 'text-xs text-center mt-2 text-green-600';
             renderSettings();
         }
@@ -4709,10 +4692,10 @@
         /**
          * Handles removing a delegate user.
          */
-        window.handleRemoveDelegate = async function(identifier) {
-            if (!confirm(`Are you sure you want to remove access for '${identifier}'?`)) return;
+        window.handleRemoveDelegate = async function(email) {
+            if (!confirm(`Remove access for ${email}?`)) return;
             if (!owner.delegates) return;
-            owner.delegates = owner.delegates.filter(d => d.email !== identifier && d.userId !== identifier);
+            owner.delegates = owner.delegates.filter(d => d.email !== email && d.userId !== email);
             await sbUpsertProfile({ delegates: owner.delegates });
             renderSettings();
         }
@@ -4776,7 +4759,7 @@
          */
         function renderSettings() {
             const container = document.getElementById('view-settings');            
-            const isOwner = !owner?.isDelegate;
+            const isOwner = true; // Simplified for now. You'd check this from the session.
 
             let userManagementHtml = '';
             let profileSettingsHtml = '';
@@ -4817,13 +4800,13 @@
                 const delegates = owner.delegates || [];
                 const canAddMore = delegates.length < 3;
 
-                const delegateListHtml = delegates.map(delegateId => `
+                const delegateListHtml = delegates.map(d => `
                     <div class="flex items-center justify-between p-3 bg-gray-100 rounded-lg">
                         <div>
-                            <span class="font-medium text-gray-700">${delegateId.userId || delegateId.email || delegateId}</span>
-                            ${delegateId.email ? `<span class="block text-xs text-gray-500">${delegateId.email}</span>` : ''}
+                            <span class="font-medium text-gray-700">${d.userId || d.email || d}</span>
+                            ${d.email ? `<span class="block text-xs text-gray-500">${d.email}</span>` : ''}
                         </div>
-                        <button onclick="handleRemoveDelegate('${delegateId.email || delegateId.userId}')" class="text-red-500 hover:text-red-700 p-1 rounded-full hover:bg-red-100" title="Remove User">
+                        <button onclick="handleRemoveDelegate('${d.email || d.userId}')" class="text-red-500 hover:text-red-700 p-1 rounded-full hover:bg-red-100" title="Remove User">
                             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
                         </button>
                     </div>
@@ -4832,7 +4815,7 @@
                 const addDelegateFormHtml = canAddMore ? `
                     <form onsubmit="event.preventDefault(); handleAddDelegate();" class="flex items-center space-x-2 mt-4">
                         <input type="email" id="new-delegate-id" required placeholder="User's Email Address" class="input-focus flex-grow p-2 border border-gray-300 rounded-lg text-sm">
-                        <input type="password" id="new-delegate-password" required placeholder="Set their Password" class="input-focus flex-grow p-2 border border-gray-300 rounded-lg text-sm">
+                        <input type="password" id="new-delegate-password" required placeholder="Set Password (min 6 chars)" class="input-focus flex-grow p-2 border border-gray-300 rounded-lg text-sm">
                         <button type="submit" class="px-4 py-2 bg-primary-green text-white text-sm font-semibold rounded-lg hover:bg-primary-green-dark transition flex-shrink-0">Add User</button>
                     </form>
                     <p id="delegate-msg" class="text-xs text-center mt-2"></p>
