@@ -1414,7 +1414,7 @@
                     const profile = await sbFetchProfile();
                     const displayName = profile?.display_name || 'Farmer';
                     const farmName    = profile?.farm_name    || 'My Farm';
-                    owner = { userId: displayName, email: result.user.email, displayName, profilePic: profile?.profile_pic || null };
+                    owner = { userId: displayName, email: result.user.email, displayName, profilePic: profile?.profile_pic || null, delegates: profile?.delegates || [] };
                     await startApp(_currentUserId, displayName, farmName);
                     return;
                 }
@@ -1458,7 +1458,7 @@
             try { profile = await sbFetchProfile(); } catch(e) {}
             const displayName = profile?.display_name || email.split('@')[0];
             const farmName    = profile?.farm_name    || 'My Farm';
-            owner = { userId: displayName, email, displayName, profilePic: profile?.profile_pic || null };
+            owner = { userId: displayName, email, displayName, profilePic: profile?.profile_pic || null, delegates: profile?.delegates || [] };
 
             await startApp(_currentUserId, displayName, farmName);
         }
@@ -4567,22 +4567,58 @@
         /**
          * Handles adding a new delegate user.
          */
-        window.handleAddDelegate = function() {
-            const newDelegateId = document.getElementById('new-delegate-id').value.trim();
-            const newDelegatePass = document.getElementById('new-delegate-password').value;
-            // This functionality is more complex with a database.
-            // It would require an API endpoint to create a new user with `is_owner=0`
-            alert("Delegate management is not supported in local storage mode.");
+        window.handleAddDelegate = async function() {
+            const idInput = document.getElementById('new-delegate-id');
+            const newDelegateId = idInput.value.trim();
+            // const newDelegatePass = document.getElementById('new-delegate-password').value; // In a full Auth setup, you would use this to create a secondary account.
+            const msgEl = document.getElementById('delegate-msg');
+
+            if (!newDelegateId) {
+                 msgEl.textContent = 'User ID is required.';
+                 msgEl.className = 'text-xs text-center mt-2 text-red-500';
+                 return;
+            }
+
+            if (!owner.delegates) owner.delegates = [];
+            
+            if (owner.delegates.length >= 3) {
+                 msgEl.textContent = 'Maximum 3 delegates allowed.';
+                 msgEl.className = 'text-xs text-center mt-2 text-red-500';
+                 return;
+            }
+
+            if (owner.delegates.some(d => d.userId === newDelegateId)) {
+                 msgEl.textContent = 'User already added.';
+                 msgEl.className = 'text-xs text-center mt-2 text-red-500';
+                 return;
+            }
+
+            msgEl.textContent = 'Adding user...';
+            msgEl.className = 'text-xs text-center mt-2 text-gray-500';
+
+            // Add to local state
+            owner.delegates.push({ userId: newDelegateId });
+
+            // Save to Supabase
+            await sbUpsertProfile({ delegates: owner.delegates });
+            
+            // Refresh view
+            renderSettings();
         }
 
         /**
          * Handles removing a delegate user.
          */
-        window.handleRemoveDelegate = function(delegateId) {
+        window.handleRemoveDelegate = async function(delegateId) {
             if (!confirm(`Are you sure you want to remove access for user '${delegateId}'?`)) {
                 return;
             }
-            alert("Delegate management is not supported in local storage mode.");
+            
+            if (!owner.delegates) return;
+            
+            owner.delegates = owner.delegates.filter(d => d.userId !== delegateId);
+            await sbUpsertProfile({ delegates: owner.delegates });
+            renderSettings();
         }
 
         window.previewProfileImage = function(input) {
