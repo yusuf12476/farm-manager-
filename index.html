@@ -526,12 +526,29 @@
             const userId = _currentUserId;
             if (!userId || !_sbAccessToken) { console.warn('sbUpsertProfile: not authenticated, skipping'); return; }
             try {
-                const r = await fetch(`${SUPABASE_URL}/rest/v1/user_profiles`, {
-                    method: 'POST',
-                    headers: { ...sbHeaders(), 'Prefer': 'resolution=merge-duplicates,return=representation' },
-                    body: JSON.stringify({ user_id: userId, ...profileData })
-                });
-                if (!r.ok) console.error('sbUpsertProfile error:', await r.text());
+                // First try to PATCH (update) the existing row by user_id
+                const patch = await fetch(
+                    `${SUPABASE_URL}/rest/v1/user_profiles?user_id=eq.${userId}`,
+                    {
+                        method: 'PATCH',
+                        headers: { ...sbHeaders(), 'Prefer': 'return=representation' },
+                        body: JSON.stringify(profileData)
+                    }
+                );
+                if (patch.ok) {
+                    const updated = await patch.json();
+                    // If PATCH updated 0 rows (new user), fall back to INSERT
+                    if (Array.isArray(updated) && updated.length === 0) {
+                        const insert = await fetch(`${SUPABASE_URL}/rest/v1/user_profiles`, {
+                            method: 'POST',
+                            headers: { ...sbHeaders(), 'Prefer': 'return=representation' },
+                            body: JSON.stringify({ user_id: userId, ...profileData })
+                        });
+                        if (!insert.ok) console.error('sbUpsertProfile insert error:', await insert.text());
+                    }
+                } else {
+                    console.error('sbUpsertProfile patch error:', await patch.text());
+                }
             } catch(e) { console.error('sbUpsertProfile network error:', e); }
         }
 
@@ -791,7 +808,6 @@
          * Logs the user out via Supabase and reloads.
          */
         async function handleLogout() {
-            // Flush any pending saves before clearing the token
             try {
                 const dataKeys = ['livestock','transactions','production','tasks','inventory','animals','breeding','health','equipment','journal','milkProduction'];
                 await Promise.all(dataKeys.map(col => saveCollection(col)));
