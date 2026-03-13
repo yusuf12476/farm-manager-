@@ -1505,6 +1505,66 @@
             return totalMigrated;
         }
 
+        // Export all farm data as a downloadable JSON file
+        window.exportDataAsJson = function() {
+            const dataKeys = ['livestock','transactions','production','tasks','inventory','animals','breeding','health','equipment','journal','milkProduction'];
+            const exportObj = { farmName: window.farmData.farmName };
+            dataKeys.forEach(k => { exportObj[k] = window.farmData[k] || []; });
+
+            const blob = new Blob([JSON.stringify(exportObj, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `farm-tracker-backup-${new Date().toISOString().slice(0,10)}.json`;
+            a.click();
+            URL.revokeObjectURL(url);
+        };
+
+        // Import farm data from a JSON file and push to Supabase
+        window.importDataFromJson = async function(input) {
+            const file = input.files[0];
+            if (!file) return;
+            const msgEl = document.getElementById('import-msg');
+            msgEl.textContent = 'Reading file...';
+            msgEl.className = 'text-center text-sm font-medium text-gray-500';
+
+            const text = await file.text();
+            let parsed;
+            try { parsed = JSON.parse(text); }
+            catch(e) {
+                msgEl.textContent = '❌ Invalid JSON file.';
+                msgEl.className = 'text-center text-sm font-medium text-red-500';
+                return;
+            }
+
+            const dataKeys = ['livestock','transactions','production','tasks','inventory','animals','breeding','health','equipment','journal','milkProduction'];
+            let total = 0;
+
+            for (const col of dataKeys) {
+                const records = parsed[col];
+                if (!Array.isArray(records) || records.length === 0) continue;
+                msgEl.textContent = `Uploading ${col} (${records.length} records)...`;
+                for (const rec of records) {
+                    if (!rec.id) rec.id = Date.now().toString() + Math.random().toString(36).slice(2);
+                    try { await sbUpsert(col, rec); total++; } catch(e) {}
+                }
+                window.farmData[col] = records; // also update in-memory
+            }
+
+            if (parsed.farmName) {
+                window.farmData.farmName = parsed.farmName;
+                try { await sbUpsertProfile({ farm_name: parsed.farmName }); } catch(e) {}
+            }
+
+            localStorage.setItem('farmData', JSON.stringify(window.farmData));
+            renderAllViews();
+            changeView('dashboard');
+
+            msgEl.textContent = `✅ ${total} records imported successfully!`;
+            msgEl.className = 'text-center text-sm font-medium text-green-600';
+            input.value = ''; // reset file input
+        };
+
         window.forceMigration = async function() {
             const btn = document.getElementById('migration-btn');
             if (btn) { btn.textContent = 'Migrating...'; btn.disabled = true; }
@@ -4659,8 +4719,13 @@
                     </div>
                     <div class="bg-card-bg p-8 rounded-2xl shadow-lg border border-yellow-200 mt-6">
                         <h3 class="text-xl font-bold mb-2 text-gray-800">Data Migration</h3>
-                        <p class="text-sm text-gray-500 mb-4">If your old data from before the cloud upgrade isn't showing, click below to import it from this browser's local storage into Supabase.</p>
-                        <button id="migration-btn" onclick="forceMigration()" class="w-full bg-yellow-500 hover:bg-yellow-600 text-white py-3 rounded-lg font-bold transition shadow-md">Re-run Migration from Local Storage</button>
+                        <p class="text-sm text-gray-500 mb-4">If your old data isn't showing, use these tools to transfer it. <strong>Step 1:</strong> Open the old index.html file on your computer and click "Export Data as JSON". <strong>Step 2:</strong> Come back here and click "Import JSON File".</p>
+                        <div class="space-y-3">
+                            <button onclick="exportDataAsJson()" class="w-full bg-blue-500 hover:bg-blue-600 text-white py-3 rounded-lg font-bold transition shadow-md">📤 Export Current Data as JSON (for backup)</button>
+                            <button onclick="document.getElementById('json-import-input').click()" class="w-full bg-yellow-500 hover:bg-yellow-600 text-white py-3 rounded-lg font-bold transition shadow-md">📥 Import JSON File (restore old data)</button>
+                            <input type="file" id="json-import-input" accept=".json" class="hidden" onchange="importDataFromJson(this)">
+                            <p id="import-msg" class="text-center text-sm font-medium"></p>
+                        </div>
                     </div>
                 `;
 
