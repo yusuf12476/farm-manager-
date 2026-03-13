@@ -8,6 +8,9 @@
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><path fill='%23059669' d='M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8h5z'/></svg>">
     <!-- Apple Touch Icon for "Add to Home Screen" -->
     <link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><path fill='%23059669' d='M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8h5z'/></svg>">
+    <!-- PWA Manifest -->
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#059669">
     <!-- Load Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- Load Chart.js for data visualization -->
@@ -4732,7 +4735,7 @@
 
                 const addDelegateFormHtml = canAddMore ? `
                     <form onsubmit="event.preventDefault(); handleAddDelegate();" class="flex items-center space-x-2 mt-4">
-                        <input type="text" id="new-delegate-id" required placeholder="New User ID" class="input-focus flex-grow p-2 border border-gray-300 rounded-lg text-sm" pattern="[a-z0-9_]+">
+                        <input type="text" id="new-delegate-id" required placeholder="New User ID (e.g. email or name)" class="input-focus flex-grow p-2 border border-gray-300 rounded-lg text-sm">
                         <input type="password" id="new-delegate-password" required placeholder="Set Initial Password" class="input-focus flex-grow p-2 border border-gray-300 rounded-lg text-sm">
                         <button type="submit" class="px-4 py-2 bg-primary-green text-white text-sm font-semibold rounded-lg hover:bg-primary-green-dark transition flex-shrink-0">Add User</button>
                     </form>
@@ -5650,6 +5653,14 @@
         // Execute initialization when the DOM is ready
         initializeLocalApp();
 
+        // Register Service Worker for PWA
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('./sw.js')
+                    .then(reg => console.log('Service Worker registered successfully'))
+                    .catch(err => console.log('Service Worker registration failed:', err));
+            });
+        }
     </script>
 </body>
 </html>
