@@ -483,26 +483,36 @@
 
         /** Fetch all records for a collection */
         async function sbFetchCollection(collection) {
-            const userId = _currentUserId;
-            const r = await fetch(
-                `${SUPABASE_URL}/rest/v1/farm_data?user_id=eq.${userId}&collection=eq.${collection}&select=data`,
-                { headers: sbHeaders() }
-            );
-            if (!r.ok) { console.error('sbFetch error:', await r.text()); return []; }
-            const rows = await r.json();
-            return rows.map(row => row.data);
+            try {
+                const userId = _currentUserId;
+                const r = await fetch(
+                    `${SUPABASE_URL}/rest/v1/farm_data?user_id=eq.${userId}&collection=eq.${collection}&select=data`,
+                    { headers: sbHeaders() }
+                );
+                if (!r.ok) { console.warn(`sbFetch ${collection}:`, r.status); return []; }
+                const rows = await r.json();
+                return Array.isArray(rows) ? rows.map(row => row.data).filter(Boolean) : [];
+            } catch(e) {
+                console.warn(`sbFetchCollection(${collection}) error:`, e);
+                return [];
+            }
         }
 
         /** Fetch user profile row */
         async function sbFetchProfile() {
-            const userId = _currentUserId;
-            const r = await fetch(
-                `${SUPABASE_URL}/rest/v1/user_profiles?user_id=eq.${userId}&select=*`,
-                { headers: sbHeaders() }
-            );
-            if (!r.ok) return null;
-            const rows = await r.json();
-            return rows[0] || null;
+            try {
+                const userId = _currentUserId;
+                const r = await fetch(
+                    `${SUPABASE_URL}/rest/v1/user_profiles?user_id=eq.${userId}&select=*`,
+                    { headers: sbHeaders() }
+                );
+                if (!r.ok) return null;
+                const rows = await r.json();
+                return Array.isArray(rows) && rows.length > 0 ? rows[0] : null;
+            } catch(e) {
+                console.warn('sbFetchProfile error:', e);
+                return null;
+            }
         }
 
         /** Upsert user profile */
@@ -1405,14 +1415,21 @@
         async function handleLogin() {
             const email    = document.getElementById('login-email').value.trim();
             const password = document.getElementById('login-password').value;
-            const btn = document.getElementById('login-btn');
 
             if (!email || !password) { renderSecurityModal('login', 'Email and password are required.'); return; }
 
+            // Show inline loading state without destroying the button
+            const btn = document.getElementById('login-btn');
             btn.textContent = 'Logging in...';
             btn.disabled = true;
 
-            const result = await sbSignIn(email, password);
+            let result;
+            try {
+                result = await sbSignIn(email, password);
+            } catch(e) {
+                renderSecurityModal('login', 'Network error. Please check your connection.');
+                return;
+            }
 
             if (result.error) {
                 renderSecurityModal('login', result.error.message || 'Invalid email or password.');
@@ -1423,7 +1440,8 @@
             _currentUserId = result.user.id;
             localStorage.setItem('sb_refresh', result.refresh_token);
 
-            const profile = await sbFetchProfile();
+            let profile = null;
+            try { profile = await sbFetchProfile(); } catch(e) {}
             const displayName = profile?.display_name || email.split('@')[0];
             const farmName    = profile?.farm_name    || 'My Farm';
             owner = { userId: displayName, email, displayName, profilePic: profile?.profile_pic || null };
@@ -1442,28 +1460,93 @@
         /**
          * Starts the main application after successful login — loads all data from Supabase.
          */
+        /**
+         * One-time migration: if old farmData exists in localStorage, push to Supabase.
+         */
+        async function migrateLocalStorageToSupabase(force = false) {
+            const migrationKey = `sb_migrated_${_currentUserId}`;
+            if (!force && localStorage.getItem(migrationKey)) return 0;
+
+            const cached = localStorage.getItem('farmData');
+            if (!cached) return 0;
+
+            let parsed;
+            try { parsed = JSON.parse(cached); } catch(e) { return 0; }
+
+            const dataKeys = [
+                'livestock','transactions','production','tasks','inventory',
+                'animals','breeding','health','equipment','journal','milkProduction'
+            ];
+
+            const hasData = dataKeys.some(k => Array.isArray(parsed[k]) && parsed[k].length > 0);
+            if (!hasData) return 0;
+
+            const loadMsg = document.getElementById('loading-msg');
+            let totalMigrated = 0;
+
+            for (const col of dataKeys) {
+                const records = parsed[col];
+                if (!Array.isArray(records) || records.length === 0) continue;
+                if (loadMsg) loadMsg.textContent = `Migrating ${col} (${records.length} records)...`;
+                for (const rec of records) {
+                    if (!rec.id) rec.id = Date.now().toString() + Math.random().toString(36).slice(2);
+                    try { await sbUpsert(col, rec); totalMigrated++; } catch(e) { console.warn('migrate fail:', col, e); }
+                }
+            }
+
+            if (parsed.farmName) {
+                try { await sbUpsertProfile({ farm_name: parsed.farmName }); } catch(e) {}
+            }
+
+            if (totalMigrated > 0) {
+                localStorage.setItem(migrationKey, totalMigrated.toString());
+            }
+            console.log(`Migration: ${totalMigrated} records pushed.`);
+            return totalMigrated;
+        }
+
+        window.forceMigration = async function() {
+            const btn = document.getElementById('migration-btn');
+            if (btn) { btn.textContent = 'Migrating...'; btn.disabled = true; }
+            const count = await migrateLocalStorageToSupabase(true);
+            const dataKeys = ['livestock','transactions','production','tasks','inventory','animals','breeding','health','equipment','journal','milkProduction'];
+            const results = await Promise.all(dataKeys.map(col => sbFetchCollection(col)));
+            dataKeys.forEach((col, i) => { window.farmData[col] = results[i]; });
+            localStorage.setItem('farmData', JSON.stringify(window.farmData));
+            renderAllViews();
+            changeView('dashboard');
+            if (btn) { btn.textContent = 'Re-run Migration'; btn.disabled = false; }
+            alert(count > 0 ? `✅ ${count} records imported successfully!` : '⚠️ No local data found to migrate.');
+        };
+
         async function startApp(currentUserId, displayName, farmName) {
             // Show loading state in modal
             const modalContent = document.getElementById('security-modal-content');
             modalContent.innerHTML = `
                 <div class="text-center py-6">
                     <div class="inline-block w-10 h-10 border-4 border-primary-green border-t-transparent rounded-full animate-spin mb-4"></div>
-                    <p class="text-gray-700 font-medium">Loading your farm data...</p>
+                    <p class="text-gray-700 font-medium" id="loading-msg">Loading your farm data...</p>
                 </div>
             `;
             document.getElementById('security-modal-container').classList.remove('scale-95','opacity-0');
             document.getElementById('security-modal-container').classList.add('scale-100','opacity-100');
 
-            loadFiltersFromLocalStorage();
+            try {
+                loadFiltersFromLocalStorage();
+            } catch(e) {}
 
-            // Load all collections from Supabase in parallel
+            // One-time migration of old localStorage data
+            const loadMsg = document.getElementById('loading-msg');
+            if (loadMsg) loadMsg.textContent = 'Migrating existing data to cloud...';
+            await migrateLocalStorageToSupabase();
+            if (loadMsg) loadMsg.textContent = 'Loading your farm data...';
+
             const freshConfig = { ...window.farmData };
             const configKeys = [
                 'livestockTypes','productionTypes','transactionCategories',
                 'taskPriorities','taskStatuses','inventoryCategories',
                 'animalSpecies','breedingStatuses','milkingTimes','gestationDays','animalTags'
             ];
-
             const dataKeys = [
                 'livestock','transactions','production','tasks','inventory',
                 'animals','breeding','health','equipment','journal','milkProduction'
@@ -1472,33 +1555,35 @@
             try {
                 const results = await Promise.all(dataKeys.map(col => sbFetchCollection(col)));
                 dataKeys.forEach((col, i) => {
-                    window.farmData[col] = results[i];
+                    window.farmData[col] = Array.isArray(results[i]) ? results[i] : [];
                 });
             } catch(e) {
-                console.error('Error loading from Supabase, falling back to cache', e);
-                const cached = localStorage.getItem('farmData');
-                if (cached) {
-                    const parsed = JSON.parse(cached);
-                    dataKeys.forEach(col => { window.farmData[col] = parsed[col] || []; });
-                }
+                console.error('Supabase load failed, using cache:', e);
+                try {
+                    const cached = localStorage.getItem('farmData');
+                    if (cached) {
+                        const parsed = JSON.parse(cached);
+                        dataKeys.forEach(col => { window.farmData[col] = parsed[col] || []; });
+                    }
+                } catch(e2) {}
             }
 
-            // Restore fresh config keys
+            // Restore config keys from fresh code
             configKeys.forEach(key => { if (freshConfig[key]) window.farmData[key] = freshConfig[key]; });
-            window.farmData.farmName = farmName;
+            window.farmData.farmName = farmName || window.farmData.farmName;
 
-            // Cache locally
-            localStorage.setItem('farmData', JSON.stringify(window.farmData));
+            try { localStorage.setItem('farmData', JSON.stringify(window.farmData)); } catch(e) {}
 
             isAuthReady = true;
-            updateUserProfileUI();
-            renderAllViews();
-            changeView('dashboard');
 
-            // Hide modal
+            try { updateUserProfileUI(); } catch(e) {}
+            try { renderAllViews(); } catch(e) {}
+            try { changeView('dashboard'); } catch(e) {}
+
+            // Hide security modal
             const securityModal = document.getElementById('security-modal-backdrop');
             securityModal.style.opacity = '0';
-            setTimeout(() => securityModal.style.display = 'none', 500);
+            setTimeout(() => { securityModal.style.display = 'none'; }, 500);
 
             setTimeout(showApp, 500);
         }
@@ -4571,6 +4656,11 @@
                             <button type="submit" class="w-full bg-primary-green text-white py-3 rounded-lg font-bold hover:bg-primary-green-dark transition shadow-md">Save Farm Settings</button>
                             <p id="farm-settings-msg" class="text-center mt-4 text-sm font-medium"></p>
                         </form>
+                    </div>
+                    <div class="bg-card-bg p-8 rounded-2xl shadow-lg border border-yellow-200 mt-6">
+                        <h3 class="text-xl font-bold mb-2 text-gray-800">Data Migration</h3>
+                        <p class="text-sm text-gray-500 mb-4">If your old data from before the cloud upgrade isn't showing, click below to import it from this browser's local storage into Supabase.</p>
+                        <button id="migration-btn" onclick="forceMigration()" class="w-full bg-yellow-500 hover:bg-yellow-600 text-white py-3 rounded-lg font-bold transition shadow-md">Re-run Migration from Local Storage</button>
                     </div>
                 `;
 
