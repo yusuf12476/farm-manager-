@@ -4717,16 +4717,6 @@
                             <p id="farm-settings-msg" class="text-center mt-4 text-sm font-medium"></p>
                         </form>
                     </div>
-                    <div class="bg-card-bg p-8 rounded-2xl shadow-lg border border-yellow-200 mt-6">
-                        <h3 class="text-xl font-bold mb-2 text-gray-800">Data Migration</h3>
-                        <p class="text-sm text-gray-500 mb-4">If your old data isn't showing, use these tools to transfer it. <strong>Step 1:</strong> Open the old index.html file on your computer and click "Export Data as JSON". <strong>Step 2:</strong> Come back here and click "Import JSON File".</p>
-                        <div class="space-y-3">
-                            <button onclick="exportDataAsJson()" class="w-full bg-blue-500 hover:bg-blue-600 text-white py-3 rounded-lg font-bold transition shadow-md">📤 Export Current Data as JSON (for backup)</button>
-                            <button onclick="document.getElementById('json-import-input').click()" class="w-full bg-yellow-500 hover:bg-yellow-600 text-white py-3 rounded-lg font-bold transition shadow-md">📥 Import JSON File (restore old data)</button>
-                            <input type="file" id="json-import-input" accept=".json" class="hidden" onchange="importDataFromJson(this)">
-                            <p id="import-msg" class="text-center text-sm font-medium"></p>
-                        </div>
-                    </div>
                 `;
 
 
