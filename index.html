@@ -459,20 +459,27 @@
          */
         async function sbUpsert(collection, record) {
             const userId = _currentUserId;
+            if (!userId) { console.warn('sbUpsert: no user id, skipping', collection); return; }
+            if (!record || !record.id) { console.warn('sbUpsert: record missing id, skipping', collection, record); return; }
+            if (!_sbAccessToken) { console.warn('sbUpsert: no access token, skipping', collection); return; }
             const body = {
                 user_id: userId,
                 collection,
-                record_id: record.id,
+                record_id: String(record.id),
                 data: record
             };
-            const r = await fetch(`${SUPABASE_URL}/rest/v1/farm_data`, {
-                method: 'POST',
-                headers: { ...sbHeaders(), 'Prefer': 'resolution=merge-duplicates,return=representation' },
-                body: JSON.stringify(body)
-            });
-            if (!r.ok) {
-                const err = await r.text();
-                console.error('sbUpsert error:', err);
+            try {
+                const r = await fetch(`${SUPABASE_URL}/rest/v1/farm_data`, {
+                    method: 'POST',
+                    headers: { ...sbHeaders(), 'Prefer': 'resolution=merge-duplicates,return=representation' },
+                    body: JSON.stringify(body)
+                });
+                if (!r.ok) {
+                    const err = await r.text();
+                    console.error('sbUpsert error:', collection, err);
+                }
+            } catch(e) {
+                console.error('sbUpsert network error:', collection, e);
             }
         }
 
@@ -589,6 +596,11 @@
         async function saveCollection(collection) {
             const records = window.farmData[collection];
             if (!Array.isArray(records)) return;
+            if (!_sbAccessToken) {
+                // Not logged in — only update local cache
+                localStorage.setItem('farmData', JSON.stringify(window.farmData));
+                return;
+            }
             // Upsert each record (Supabase handles insert-or-update)
             const promises = records.map(rec => sbUpsert(collection, rec));
             await Promise.all(promises);
@@ -785,6 +797,14 @@
          * Logs the user out via Supabase and reloads.
          */
         async function handleLogout() {
+            // Flush any pending saves to Supabase before clearing the token
+            try {
+                const dataKeys = [
+                    'livestock','transactions','production','tasks','inventory',
+                    'animals','breeding','health','equipment','journal','milkProduction'
+                ];
+                await Promise.all(dataKeys.map(col => saveCollection(col)));
+            } catch(e) { console.warn('Pre-logout sync error:', e); }
             await sbSignOut();
             localStorage.removeItem('sb_refresh');
             localStorage.removeItem('sb_user_id');
