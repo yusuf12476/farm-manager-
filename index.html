@@ -420,7 +420,14 @@
                 headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_KEY },
                 body: JSON.stringify({ email, password })
             });
-            return r.json();
+            const data = await r.json();
+            // Normalise: some Supabase versions nest tokens under data.session
+            if (!data.access_token && data.session?.access_token) {
+                data.access_token  = data.session.access_token;
+                data.refresh_token = data.session.refresh_token;
+                data.user          = data.user || data.session.user;
+            }
+            return data;
         }
 
         /** Auth: sign out */
@@ -459,7 +466,13 @@
                 headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_KEY },
                 body: JSON.stringify({ refresh_token: refreshToken })
             });
-            return r.json();
+            const data = await r.json();
+            if (!data.access_token && data.session?.access_token) {
+                data.access_token  = data.session.access_token;
+                data.refresh_token = data.session.refresh_token;
+                data.user          = data.user || data.session.user;
+            }
+            return data;
         }
 
         /**
@@ -1503,9 +1516,7 @@
 
             let result;
             try {
-                console.log('Step 1: signing in...');
                 result = await sbSignIn(email, password);
-                console.log('Step 1 done. Has access_token:', !!result?.access_token, 'Has user:', !!result?.user, 'Error:', result?.error?.message);
             } catch(e) {
                 renderSecurityModal('login', 'Network error. Please check your connection.');
                 return;
@@ -1522,15 +1533,18 @@
             }
 
             try {
-                console.log('Step 2: setting tokens...');
                 _sbAccessToken = result.access_token;
-                _currentUserId = result.user.id;
+                _currentUserId = result.user?.id;
+
+                if (!_sbAccessToken || !_currentUserId) {
+                    renderSecurityModal('login', 'Login failed: no session returned. Please try again.');
+                    return;
+                }
+
                 localStorage.setItem('sb_refresh', result.refresh_token);
 
-                console.log('Step 3: fetching profile...');
                 let profile = null;
-                try { profile = await sbFetchProfile(); } catch(e) { console.warn('Profile fetch error:', e); }
-                console.log('Step 3 done. Profile:', profile ? 'found' : 'null', 'owner_id:', profile?.owner_id);
+                try { profile = await sbFetchProfile(); } catch(e) {}
 
                 let displayName, farmName;
                 if (profile?.owner_id) {
@@ -1546,13 +1560,10 @@
                     farmName    = profile?.farm_name    || 'My Farm';
                     owner = { userId: displayName, email, displayName, profilePic: profile?.profile_pic || null, delegates: profile?.delegates || [] };
                 }
-
-                console.log('Step 4: calling startApp...');
                 await startApp(_currentUserId, displayName, farmName);
-                console.log('Step 4 done.');
             } catch(e) {
-                console.error('Login error at step:', e.message, e.stack);
-                renderSecurityModal('login', 'Error: ' + (e.message || 'Unknown. Check console.'));
+                console.error('Login error:', e);
+                renderSecurityModal('login', 'Error: ' + (e.message || 'Unknown error. Please try again.'));
             }
         }
 
