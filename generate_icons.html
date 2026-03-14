@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Generate Icons</title>
+<style>body{font-family:sans-serif;text-align:center;padding:2rem;background:#f0f0f0}canvas{border:1px solid #ccc;margin:10px;background:#fff}</style>
+</head>
+<body>
+    <h2>Icon Generator</h2>
+    <p>1. Click the buttons to download your icons.<br>2. Move them to your project folder.</p>
+    <button onclick="downloadIcon(192)">Download icon-192.png</button>
+    <button onclick="downloadIcon(512)">Download icon-512.png</button>
+    <br><br>
+    <canvas id="c"></canvas>
+    <script>
+    function downloadIcon(size) {
+        const canvas = document.getElementById('c');
+        canvas.width = size;
+        canvas.height = size;
+        const ctx = canvas.getContext('2d');
+
+        // Background
+        ctx.fillStyle = '#1a1209';
+        ctx.fillRect(0, 0, size, size);
+
+        // Symbol (✦)
+        ctx.fillStyle = '#c9a84c';
+        ctx.font = (size * 0.7) + "px sans-serif";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText("✦", size / 2, size / 2 + (size * 0.05));
+
+        const link = document.createElement('a');
+        link.download = 'icon-' + size + '.png';
+        link.href = canvas.toDataURL('image/png');
+        link.click();
+    }
+    </script>
+</body>
+</html>
