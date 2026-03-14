@@ -1497,7 +1497,6 @@
 
             if (!email || !password) { renderSecurityModal('login', 'Email and password are required.'); return; }
 
-            // Show inline loading state without destroying the button
             const btn = document.getElementById('login-btn');
             btn.textContent = 'Logging in...';
             btn.disabled = true;
@@ -1510,31 +1509,37 @@
                 return;
             }
 
-            if (result.error) {
-                renderSecurityModal('login', result.error.message || 'Invalid email or password.');
+            if (!result || result.error) {
+                renderSecurityModal('login', result?.error?.message || 'Invalid email or password.');
                 return;
             }
 
-            _sbAccessToken = result.access_token;
-            _currentUserId = result.user.id;
-            localStorage.setItem('sb_refresh', result.refresh_token);
+            try {
+                _sbAccessToken = result.access_token;
+                _currentUserId = result.user.id;
+                localStorage.setItem('sb_refresh', result.refresh_token);
 
-            let profile = null;
-            try { profile = await sbFetchProfile(); } catch(e) {}
+                let profile = null;
+                try { profile = await sbFetchProfile(); } catch(e) {}
 
-            if (profile?.owner_id) {
-                _dataOwnerId = profile.owner_id;
-                const ownerProfile = await sbFetchProfileById(profile.owner_id);
-                const displayName = profile.display_name || email.split('@')[0];
-                const farmName    = ownerProfile?.farm_name || 'My Farm';
-                owner = { userId: displayName, email, displayName, profilePic: profile?.profile_pic || null, delegates: [], isDelegate: true };
-                await startApp(_currentUserId, displayName, farmName);
-            } else {
-                _dataOwnerId = null;
-                const displayName = profile?.display_name || email.split('@')[0];
-                const farmName    = profile?.farm_name    || 'My Farm';
-                owner = { userId: displayName, email, displayName, profilePic: profile?.profile_pic || null, delegates: profile?.delegates || [] };
-                await startApp(_currentUserId, displayName, farmName);
+                if (profile?.owner_id) {
+                    _dataOwnerId = profile.owner_id;
+                    let ownerProfile = null;
+                    try { ownerProfile = await sbFetchProfileById(profile.owner_id); } catch(e) {}
+                    const displayName = profile.display_name || email.split('@')[0];
+                    const farmName    = ownerProfile?.farm_name || 'My Farm';
+                    owner = { userId: displayName, email, displayName, profilePic: profile?.profile_pic || null, delegates: [], isDelegate: true };
+                    await startApp(_currentUserId, displayName, farmName);
+                } else {
+                    _dataOwnerId = null;
+                    const displayName = profile?.display_name || email.split('@')[0];
+                    const farmName    = profile?.farm_name    || 'My Farm';
+                    owner = { userId: displayName, email, displayName, profilePic: profile?.profile_pic || null, delegates: profile?.delegates || [] };
+                    await startApp(_currentUserId, displayName, farmName);
+                }
+            } catch(e) {
+                console.error('Login post-processing error:', e);
+                renderSecurityModal('login', 'Login succeeded but failed to load your data. Please try again.');
             }
         }
 
@@ -1669,7 +1674,6 @@
         };
 
         async function startApp(currentUserId, displayName, farmName) {
-            // Show loading state in modal
             const modalContent = document.getElementById('security-modal-content');
             modalContent.innerHTML = `
                 <div class="text-center py-6">
@@ -1684,10 +1688,17 @@
                 loadFiltersFromLocalStorage();
             } catch(e) {}
 
-            // One-time migration of old localStorage data
             const loadMsg = document.getElementById('loading-msg');
-            if (loadMsg) loadMsg.textContent = 'Migrating existing data to cloud...';
-            await migrateLocalStorageToSupabase();
+
+            // Migration with a timeout so it never hangs login
+            try {
+                if (loadMsg) loadMsg.textContent = 'Migrating existing data to cloud...';
+                await Promise.race([
+                    migrateLocalStorageToSupabase(),
+                    new Promise(resolve => setTimeout(resolve, 5000)) // 5s timeout
+                ]);
+            } catch(e) { console.warn('Migration skipped:', e); }
+
             if (loadMsg) loadMsg.textContent = 'Loading your farm data...';
 
             const freshConfig = { ...window.farmData };
@@ -1702,7 +1713,11 @@
             ];
 
             try {
-                const results = await Promise.all(dataKeys.map(col => sbFetchCollection(col)));
+                // Fetch with a timeout so slow connections don't hang forever
+                const results = await Promise.race([
+                    Promise.all(dataKeys.map(col => sbFetchCollection(col))),
+                    new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 10000))
+                ]);
                 dataKeys.forEach((col, i) => {
                     window.farmData[col] = Array.isArray(results[i]) ? results[i] : [];
                 });
