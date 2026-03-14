@@ -1762,6 +1762,9 @@
             return map[col] || col;
         }
 
+        /** Stub — called throughout the app but notification UI not implemented */
+        function generateAndRenderNotifications() {}
+
         function renderAllViews() {
             const { livestock, transactions, production, tasks, inventory } = farmData;
             renderDashboard(livestock, transactions, production, tasks, inventory);
