@@ -1522,21 +1522,21 @@
                 let profile = null;
                 try { profile = await sbFetchProfile(); } catch(e) {}
 
+                let displayName, farmName;
                 if (profile?.owner_id) {
                     _dataOwnerId = profile.owner_id;
                     let ownerProfile = null;
                     try { ownerProfile = await sbFetchProfileById(profile.owner_id); } catch(e) {}
-                    const displayName = profile.display_name || email.split('@')[0];
-                    const farmName    = ownerProfile?.farm_name || 'My Farm';
+                    displayName = profile.display_name || email.split('@')[0];
+                    farmName    = ownerProfile?.farm_name || 'My Farm';
                     owner = { userId: displayName, email, displayName, profilePic: profile?.profile_pic || null, delegates: [], isDelegate: true };
-                    await startApp(_currentUserId, displayName, farmName);
                 } else {
                     _dataOwnerId = null;
-                    const displayName = profile?.display_name || email.split('@')[0];
-                    const farmName    = profile?.farm_name    || 'My Farm';
+                    displayName = profile?.display_name || email.split('@')[0];
+                    farmName    = profile?.farm_name    || 'My Farm';
                     owner = { userId: displayName, email, displayName, profilePic: profile?.profile_pic || null, delegates: profile?.delegates || [] };
-                    await startApp(_currentUserId, displayName, farmName);
                 }
+                await startApp(_currentUserId, displayName, farmName);
             } catch(e) {
                 console.error('Login post-processing error:', e);
                 renderSecurityModal('login', 'Login succeeded but failed to load your data. Please try again.');
@@ -1740,14 +1740,18 @@
 
             isAuthReady = true;
 
-            try { updateUserProfileUI(); } catch(e) {}
-            try { renderAllViews(); } catch(e) {}
-            try { changeView('dashboard'); } catch(e) {}
+            try { updateUserProfileUI(); } catch(e) { console.warn('updateUserProfileUI error:', e); }
+            try { renderAllViews(); } catch(e) { console.warn('renderAllViews error:', e); }
+            try { changeView('dashboard'); } catch(e) { console.warn('changeView error:', e); }
 
             // Hide security modal
-            const securityModal = document.getElementById('security-modal-backdrop');
-            securityModal.style.opacity = '0';
-            setTimeout(() => { securityModal.style.display = 'none'; }, 500);
+            try {
+                const securityModal = document.getElementById('security-modal-backdrop');
+                if (securityModal) {
+                    securityModal.style.opacity = '0';
+                    setTimeout(() => { securityModal.style.display = 'none'; }, 500);
+                }
+            } catch(e) {}
 
             setTimeout(showApp, 500);
         }
