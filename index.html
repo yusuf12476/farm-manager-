@@ -737,7 +737,7 @@
                     </form>
                     <div class="flex justify-between items-center mt-4">
                         <button onclick="renderSecurityModal('setup')" class="text-xs text-blue-500 hover:underline">Create a new account</button>
-                        <button onclick="renderSecurityModal('forgot-password')" class="text-xs text-gray-500 hover:text-primary-green hover:underline">Forgot password?</button>
+                        <button onclick="renderSecurityModal('forgot-password')" class="text-xs font-semibold text-primary-green hover:underline">Forgot password?</button>
                     </div>
                 `;
             }
@@ -1473,28 +1473,36 @@
             // Try to restore session from stored refresh token
             const storedRefresh = localStorage.getItem('sb_refresh');
             if (storedRefresh) {
-                const result = await sbRefreshSession(storedRefresh);
-                if (result.access_token) {
-                    _sbAccessToken = result.access_token;
-                    _currentUserId = result.user.id;
-                    localStorage.setItem('sb_refresh', result.refresh_token);
+                try {
+                    const result = await sbRefreshSession(storedRefresh);
+                    if (result.access_token && result.user?.id) {
+                        _sbAccessToken = result.access_token;
+                        _currentUserId = result.user.id;
+                        localStorage.setItem('sb_refresh', result.refresh_token);
 
-                    const profile = await sbFetchProfile();
-                    if (profile?.owner_id) {
-                        _dataOwnerId = profile.owner_id;
-                        const ownerProfile = await sbFetchProfileById(profile.owner_id);
-                        const displayName = profile.display_name || 'User';
-                        const farmName    = ownerProfile?.farm_name || 'My Farm';
-                        owner = { userId: displayName, email: result.user.email, displayName, profilePic: profile?.profile_pic || null, delegates: [], isDelegate: true };
+                        let profile = null;
+                        try { profile = await sbFetchProfile(); } catch(e) {}
+
+                        let displayName, farmName;
+                        if (profile?.owner_id) {
+                            _dataOwnerId = profile.owner_id;
+                            let ownerProfile = null;
+                            try { ownerProfile = await sbFetchProfileById(profile.owner_id); } catch(e) {}
+                            displayName = profile.display_name || 'User';
+                            farmName    = ownerProfile?.farm_name || 'My Farm';
+                            owner = { userId: displayName, email: result.user.email, displayName, profilePic: profile?.profile_pic || null, delegates: [], isDelegate: true };
+                        } else {
+                            _dataOwnerId = null;
+                            displayName = profile?.display_name || 'Farmer';
+                            farmName    = profile?.farm_name    || 'My Farm';
+                            owner = { userId: displayName, email: result.user.email, displayName, profilePic: profile?.profile_pic || null, delegates: profile?.delegates || [] };
+                        }
                         await startApp(_currentUserId, displayName, farmName);
-                    } else {
-                        _dataOwnerId = null;
-                        const displayName = profile?.display_name || 'Farmer';
-                        const farmName    = profile?.farm_name    || 'My Farm';
-                        owner = { userId: displayName, email: result.user.email, displayName, profilePic: profile?.profile_pic || null, delegates: profile?.delegates || [] };
-                        await startApp(_currentUserId, displayName, farmName);
+                        return;
                     }
-                    return;
+                } catch(e) {
+                    console.warn('Session restore failed:', e);
+                    localStorage.removeItem('sb_refresh');
                 }
             }
 
@@ -1503,6 +1511,8 @@
             modalContainer.classList.remove('scale-95', 'opacity-0');
             modalContainer.classList.add('scale-100', 'opacity-100');
         }
+
+        let _loginFailCount = 0; // track consecutive failed login attempts
 
         async function handleLogin() {
             const email    = document.getElementById('login-email').value.trim();
@@ -1523,7 +1533,12 @@
             }
 
             if (!result || result.error) {
-                renderSecurityModal('login', result?.error?.message || 'Invalid email or password.');
+                _loginFailCount++;
+                let msg = 'Incorrect email or password.';
+                if (_loginFailCount >= 2) {
+                    msg = `Incorrect password (${_loginFailCount} failed attempts). Did you forget your password? Tap "Forgot password?" below to reset it.`;
+                }
+                renderSecurityModal('login', msg);
                 return;
             }
 
@@ -1531,6 +1546,8 @@
                 renderSecurityModal('login', 'Login failed: no session returned. Check your email is confirmed.');
                 return;
             }
+
+            _loginFailCount = 0; // reset on success
 
             try {
                 _sbAccessToken = result.access_token;
