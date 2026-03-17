@@ -240,6 +240,7 @@
                     <a onclick="selectNavDropdownItem('animalhub')" class="block px-4 py-3 text-gray-700 hover:bg-gray-100" data-nav="animalhub">Animal Hub</a>
                     <a onclick="selectNavDropdownItem('equipment')" class="block px-4 py-3 text-gray-700 hover:bg-gray-100" data-nav="equipment">Equipment</a>
                     <a onclick="selectNavDropdownItem('analytics')" class="block px-4 py-3 text-gray-700 hover:bg-gray-100" data-nav="analytics">Analytics</a>
+                    <a onclick="selectNavDropdownItem('farmmind')" class="block px-4 py-3 font-semibold text-primary-green hover:bg-green-50" data-nav="farmmind">🌾 FarmMind AI</a>
                 </div>
             </div>
             <!-- Desktop Navigation (Visible on md and up) -->
@@ -253,6 +254,9 @@
                 <button onclick="changeView('animalhub')" id="tab-animalhub" class="py-3 px-3 text-gray-600 hover:text-primary-green transition duration-200 whitespace-nowrap">Animal Hub</button>
                 <button onclick="changeView('equipment')" id="tab-equipment" class="py-3 px-3 text-gray-600 hover:text-primary-green transition duration-200 whitespace-nowrap">Equipment</button>
                 <button onclick="changeView('analytics')" id="tab-analytics" class="py-3 px-3 text-gray-600 hover:text-primary-green transition duration-200 whitespace-nowrap">Analytics</button>
+                <button onclick="changeView('farmmind')" id="tab-farmmind" class="py-3 px-3 transition duration-200 whitespace-nowrap flex items-center gap-1.5 font-semibold" style="background:linear-gradient(135deg,#059669,#047857);-webkit-background-clip:text;-webkit-text-fill-color:transparent;">
+                    🌾 FarmMind AI
+                </button>
             </div>
         </nav>
 
@@ -299,6 +303,10 @@
 
         <div id="view-settings" class="view-container hidden">
             <!-- Settings content will be rendered here -->
+        </div>
+
+        <div id="view-farmmind" class="view-container hidden">
+            <!-- FarmMind AI content will be rendered here -->
         </div>
 
     </div>
@@ -1860,6 +1868,7 @@
             if (viewName === 'journal') renderJournal(farmData.journal);
             if (viewName === 'settings') renderSettings();
             if (viewName === 'dashboard') renderDashboard(farmData.livestock, farmData.transactions, farmData.production, farmData.tasks, farmData.inventory);
+            if (viewName === 'farmmind') renderFarmMind();
         }
 
         /**
@@ -5789,6 +5798,387 @@
                 setupActivityListeners();
                 resetInactivityTimer();
             }, 700); // Must match splash screen transition duration
+        }
+
+        // ============================================================
+        // FARMMIND AI — COMPLETE IMPLEMENTATION
+        // ============================================================
+
+        let farmMindHistory = [];
+        let farmMindLoading = false;
+
+        function buildFarmContext() {
+            const fd = window.farmData;
+            const today = new Date().toLocaleDateString('en-KE', { weekday:'long', year:'numeric', month:'long', day:'numeric' });
+
+            // Livestock summary
+            const livestockSummary = {};
+            (fd.livestock || []).forEach(a => {
+                const type = a.type || a.species || 'Unknown';
+                livestockSummary[type] = (livestockSummary[type] || 0) + (parseInt(a.quantity) || 1);
+            });
+
+            // Inventory summary
+            const inventoryLow = (fd.inventory || []).filter(i => {
+                const qty = parseFloat(i.quantity) || 0;
+                const min = parseFloat(i.minQuantity || i.reorderLevel || 0);
+                return qty <= min || qty < 5;
+            }).map(i => `${i.name}: ${i.quantity} ${i.unit || ''}`);
+
+            // Transactions last 30 days
+            const thirtyDaysAgo = new Date(); thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+            const recentTx = (fd.transactions || []).filter(t => new Date(t.date) >= thirtyDaysAgo);
+            const totalIncome = recentTx.filter(t => t.type === 'income').reduce((s, t) => s + (parseFloat(t.amount) || 0), 0);
+            const totalExpense = recentTx.filter(t => t.type === 'expense').reduce((s, t) => s + (parseFloat(t.amount) || 0), 0);
+
+            // Overdue tasks
+            const overdueTasks = (fd.tasks || []).filter(t => {
+                if (t.status === 'Done') return false;
+                return t.dueDate && new Date(t.dueDate) < new Date();
+            }).map(t => `${t.title} (due ${t.dueDate})`);
+
+            // Upcoming tasks (next 7 days)
+            const sevenDays = new Date(); sevenDays.setDate(sevenDays.getDate() + 7);
+            const upcomingTasks = (fd.tasks || []).filter(t => {
+                if (t.status === 'Done') return false;
+                return t.dueDate && new Date(t.dueDate) >= new Date() && new Date(t.dueDate) <= sevenDays;
+            }).map(t => `${t.title} (due ${t.dueDate})`);
+
+            // Recent production
+            const recentProd = (fd.production || []).slice(-5).map(p => `${p.type}: ${p.quantity} on ${p.date}`);
+
+            // Breeding due soon
+            const breedingDue = (fd.breeding || []).filter(b => {
+                if (!b.dueDate) return false;
+                const diff = (new Date(b.dueDate) - new Date()) / (1000*60*60*24);
+                return diff >= 0 && diff <= 14;
+            }).map(b => `${b.animalId} (${b.species}) due ${b.dueDate}`);
+
+            // Health records recent
+            const recentHealth = (fd.health || []).slice(-3).map(h => `${h.animalId}: ${h.condition || h.treatment} on ${h.date}`);
+
+            return `You are FarmMind AI, a smart personal farm assistant for a farmer in Kakamega, Kenya.
+You have full real-time access to the farmer's actual farm data below. Be practical, concise, and action-oriented.
+Respond in English unless the farmer writes in Kiswahili, then respond in Kiswahili.
+Always use KES for currency. Keep responses under 200 words unless a full report is requested.
+Use emojis sparingly. Never make up data — only reference what's in the farm data below.
+
+TODAY: ${today}
+FARM NAME: ${fd.farmName || 'My Farm'}
+LOCATION: Kakamega, Kenya
+
+LIVESTOCK:
+${Object.keys(livestockSummary).length > 0 ? Object.entries(livestockSummary).map(([k,v]) => `- ${k}: ${v}`).join('\n') : '- No livestock recorded yet'}
+
+PRODUCTION (recent):
+${recentProd.length > 0 ? recentProd.join('\n') : '- No production records yet'}
+
+INVENTORY (low stock alerts):
+${inventoryLow.length > 0 ? inventoryLow.join('\n') : '- All inventory levels OK'}
+
+FINANCES (last 30 days):
+- Income: KES ${totalIncome.toLocaleString()}
+- Expenses: KES ${totalExpense.toLocaleString()}
+- Net: KES ${(totalIncome - totalExpense).toLocaleString()}
+
+TASKS OVERDUE:
+${overdueTasks.length > 0 ? overdueTasks.join('\n') : '- None'}
+
+TASKS DUE NEXT 7 DAYS:
+${upcomingTasks.length > 0 ? upcomingTasks.join('\n') : '- None upcoming'}
+
+BREEDING DUE SOON (14 days):
+${breedingDue.length > 0 ? breedingDue.join('\n') : '- None'}
+
+RECENT HEALTH RECORDS:
+${recentHealth.length > 0 ? recentHealth.join('\n') : '- None recorded'}
+
+TOTAL RECORDS: ${(fd.livestock||[]).length} livestock, ${(fd.transactions||[]).length} transactions, ${(fd.inventory||[]).length} inventory items, ${(fd.tasks||[]).length} tasks`;
+        }
+
+        function buildDailyBriefingHTML() {
+            const fd = window.farmData;
+            const livestockSummary = {};
+            (fd.livestock || []).forEach(a => {
+                const type = a.type || a.species || 'Unknown';
+                livestockSummary[type] = (livestockSummary[type] || 0) + (parseInt(a.quantity) || 1);
+            });
+            const thirtyDaysAgo = new Date(); thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+            const recentTx = (fd.transactions || []).filter(t => new Date(t.date) >= thirtyDaysAgo);
+            const totalIncome = recentTx.filter(t => t.type === 'income').reduce((s, t) => s + (parseFloat(t.amount) || 0), 0);
+            const totalExpense = recentTx.filter(t => t.type === 'expense').reduce((s, t) => s + (parseFloat(t.amount) || 0), 0);
+            const overdueTasks = (fd.tasks || []).filter(t => t.status !== 'Done' && t.dueDate && new Date(t.dueDate) < new Date());
+            const lowStock = (fd.inventory || []).filter(i => {
+                const qty = parseFloat(i.quantity) || 0;
+                const min = parseFloat(i.minQuantity || i.reorderLevel || 0);
+                return qty <= min || qty < 5;
+            });
+
+            const animalRows = Object.entries(livestockSummary).map(([type, count]) => `
+                <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid rgba(5,150,105,0.1);font-size:0.82rem;">
+                    <span style="color:#6b7280;">${type}</span>
+                    <span style="font-weight:600;color:#1f2937;">${count} ${count === 1 ? 'animal' : count > 1 && type.toLowerCase().includes('layer') ? 'birds' : 'animals'}</span>
+                </div>`).join('');
+
+            return `
+            <div style="background:linear-gradient(135deg,#f0fdf4,#dcfce7);border:1px solid #bbf7d0;border-radius:12px;padding:1.1rem;margin-bottom:0.75rem;">
+                <div style="font-weight:700;color:#059669;margin-bottom:0.6rem;font-size:0.9rem;">🌅 Daily Briefing — ${new Date().toLocaleDateString('en-KE',{weekday:'long',day:'numeric',month:'long'})}</div>
+                ${animalRows || '<div style="color:#6b7280;font-size:0.82rem;">No livestock recorded yet — add animals in the Livestock tab.</div>'}
+                <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid rgba(5,150,105,0.1);font-size:0.82rem;margin-top:4px;">
+                    <span style="color:#6b7280;">Income (30 days)</span><span style="color:#059669;font-weight:600;">KES ${totalIncome.toLocaleString()}</span>
+                </div>
+                <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid rgba(5,150,105,0.1);font-size:0.82rem;">
+                    <span style="color:#6b7280;">Expenses (30 days)</span><span style="color:#dc2626;font-weight:600;">KES ${totalExpense.toLocaleString()}</span>
+                </div>
+                <div style="display:flex;justify-content:space-between;padding:6px 0;font-size:0.82rem;">
+                    <span style="color:#6b7280;">Net Profit</span><span style="font-weight:700;color:${(totalIncome-totalExpense)>=0?'#059669':'#dc2626'}">KES ${(totalIncome-totalExpense).toLocaleString()}</span>
+                </div>
+                ${overdueTasks.length > 0 ? `<div style="margin-top:8px;background:#fef2f2;border-radius:8px;padding:8px;font-size:0.78rem;color:#dc2626;">⚠️ ${overdueTasks.length} overdue task${overdueTasks.length>1?'s':''}: ${overdueTasks.slice(0,2).map(t=>t.title).join(', ')}</div>` : ''}
+                ${lowStock.length > 0 ? `<div style="margin-top:6px;background:#fffbeb;border-radius:8px;padding:8px;font-size:0.78rem;color:#d97706;">📦 Low stock: ${lowStock.slice(0,3).map(i=>i.name).join(', ')}</div>` : ''}
+            </div>`;
+        }
+
+        function renderFarmMind() {
+            const container = document.getElementById('view-farmmind');
+            const today = new Date().toLocaleDateString('en-KE', { weekday:'long', year:'numeric', month:'long', day:'numeric' });
+
+            container.innerHTML = `
+            <style>
+                #fm-messages::-webkit-scrollbar { width: 4px; }
+                #fm-messages::-webkit-scrollbar-thumb { background: #d1d5db; border-radius: 2px; }
+                .fm-msg { display:flex; gap:10px; animation: fmFadeUp 0.3s ease; }
+                .fm-msg.user { flex-direction:row-reverse; }
+                @keyframes fmFadeUp { from{opacity:0;transform:translateY(6px)} to{opacity:1;transform:translateY(0)} }
+                .fm-bubble { max-width:75%; padding:10px 14px; border-radius:12px; font-size:0.875rem; line-height:1.6; }
+                .fm-msg.ai .fm-bubble { background:#f9fafb; border:1px solid #e5e7eb; border-top-left-radius:4px; }
+                .fm-msg.user .fm-bubble { background:#ecfdf5; border:1px solid #a7f3d0; border-top-right-radius:4px; }
+                .fm-avatar { width:32px;height:32px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:1rem;flex-shrink:0; }
+                .fm-avatar.ai { background:linear-gradient(135deg,#059669,#047857); }
+                .fm-avatar.user { background:#f3f4f6;border:1px solid #e5e7eb; }
+                .fm-time { font-size:0.63rem;color:#9ca3af;margin-top:3px; }
+                .fm-msg.ai .fm-time { text-align:left; }
+                .fm-msg.user .fm-time { text-align:right; }
+                .fm-typing span { display:inline-block;width:6px;height:6px;background:#9ca3af;border-radius:50%;animation:fmBounce 1.2s infinite;margin:0 2px; }
+                .fm-typing span:nth-child(2){animation-delay:0.2s}
+                .fm-typing span:nth-child(3){animation-delay:0.4s}
+                @keyframes fmBounce{0%,80%,100%{transform:translateY(0);opacity:.4}40%{transform:translateY(-5px);opacity:1}}
+                .fm-quick { font-size:0.72rem;padding:5px 10px;border-radius:20px;border:1px solid #d1d5db;background:white;cursor:pointer;transition:all 0.2s;white-space:nowrap;color:#374151; }
+                .fm-quick:hover { border-color:#059669;color:#059669;background:#f0fdf4; }
+            </style>
+
+            <div style="display:grid;grid-template-columns:260px 1fr;gap:1.5rem;height:calc(100vh - 220px);min-height:500px;">
+
+                <!-- LEFT SIDEBAR -->
+                <div style="display:flex;flex-direction:column;gap:1rem;overflow-y:auto;">
+                    <div style="background:white;border:1px solid #e5e7eb;border-radius:12px;padding:1rem;">
+                        <div style="font-size:0.65rem;letter-spacing:0.12em;text-transform:uppercase;color:#9ca3af;margin-bottom:0.75rem;font-weight:600;">Farm Summary</div>
+                        <div id="fm-farm-stats">
+                            ${buildLivestockStatCards()}
+                        </div>
+                    </div>
+
+                    <div style="background:white;border:1px solid #e5e7eb;border-radius:12px;padding:1rem;">
+                        <div style="font-size:0.65rem;letter-spacing:0.12em;text-transform:uppercase;color:#9ca3af;margin-bottom:0.75rem;font-weight:600;">Quick Actions</div>
+                        <div style="display:flex;flex-direction:column;gap:0.4rem;">
+                            <button onclick="fmSendQuick('Give me today\\'s farm briefing')" style="text-align:left;padding:8px 12px;border-radius:8px;border:1px solid #e5e7eb;background:white;cursor:pointer;font-size:0.8rem;color:#374151;transition:all 0.2s;" onmouseover="this.style.borderColor='#059669';this.style.color='#059669'" onmouseout="this.style.borderColor='#e5e7eb';this.style.color='#374151'">🌅 Daily Briefing</button>
+                            <button onclick="fmSendQuick('What are my overdue tasks?')" style="text-align:left;padding:8px 12px;border-radius:8px;border:1px solid #e5e7eb;background:white;cursor:pointer;font-size:0.8rem;color:#374151;transition:all 0.2s;" onmouseover="this.style.borderColor='#059669';this.style.color='#059669'" onmouseout="this.style.borderColor='#e5e7eb';this.style.color='#374151'">⚠️ Overdue Tasks</button>
+                            <button onclick="fmSendQuick('What inventory is running low?')" style="text-align:left;padding:8px 12px;border-radius:8px;border:1px solid #e5e7eb;background:white;cursor:pointer;font-size:0.8rem;color:#374151;transition:all 0.2s;" onmouseover="this.style.borderColor='#059669';this.style.color='#059669'" onmouseout="this.style.borderColor='#e5e7eb';this.style.color='#374151'">📦 Low Inventory</button>
+                            <button onclick="fmSendQuick('Summarize my finances for the last 30 days')" style="text-align:left;padding:8px 12px;border-radius:8px;border:1px solid #e5e7eb;background:white;cursor:pointer;font-size:0.8rem;color:#374151;transition:all 0.2s;" onmouseover="this.style.borderColor='#059669';this.style.color='#059669'" onmouseout="this.style.borderColor='#e5e7eb';this.style.color='#374151'">💰 Finance Summary</button>
+                            <button onclick="fmSendQuick('Which animals need attention or health checks?')" style="text-align:left;padding:8px 12px;border-radius:8px;border:1px solid #e5e7eb;background:white;cursor:pointer;font-size:0.8rem;color:#374151;transition:all 0.2s;" onmouseover="this.style.borderColor='#059669';this.style.color='#059669'" onmouseout="this.style.borderColor='#e5e7eb';this.style.color='#374151'">🐄 Animal Health</button>
+                            <button onclick="fmSendQuick('Any animals due for breeding or birth soon?')" style="text-align:left;padding:8px 12px;border-radius:8px;border:1px solid #e5e7eb;background:white;cursor:pointer;font-size:0.8rem;color:#374151;transition:all 0.2s;" onmouseover="this.style.borderColor='#059669';this.style.color='#059669'" onmouseout="this.style.borderColor='#e5e7eb';this.style.color='#374151'">🐣 Breeding Due</button>
+                            <button onclick="fmSendQuick('Show me my recent production records')" style="text-align:left;padding:8px 12px;border-radius:8px;border:1px solid #e5e7eb;background:white;cursor:pointer;font-size:0.8rem;color:#374151;transition:all 0.2s;" onmouseover="this.style.borderColor='#059669';this.style.color='#059669'" onmouseout="this.style.borderColor='#e5e7eb';this.style.color='#374151'">📊 Production</button>
+                            <button onclick="fmSendQuick('Nipe muhtasari wa shamba langu leo')" style="text-align:left;padding:8px 12px;border-radius:8px;border:1px solid #e5e7eb;background:white;cursor:pointer;font-size:0.8rem;color:#374151;transition:all 0.2s;" onmouseover="this.style.borderColor='#059669';this.style.color='#059669'" onmouseout="this.style.borderColor='#e5e7eb';this.style.color='#374151'">🇰🇪 Kiswahili Mode</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- MAIN CHAT -->
+                <div style="display:flex;flex-direction:column;background:white;border:1px solid #e5e7eb;border-radius:12px;overflow:hidden;">
+
+                    <!-- Chat Header -->
+                    <div style="padding:1rem 1.25rem;border-bottom:1px solid #e5e7eb;display:flex;align-items:center;justify-content:space-between;">
+                        <div style="display:flex;align-items:center;gap:10px;">
+                            <div style="width:36px;height:36px;background:linear-gradient(135deg,#059669,#047857);border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:1.1rem;">🌾</div>
+                            <div>
+                                <div style="font-weight:700;color:#1f2937;font-size:0.95rem;">FarmMind AI</div>
+                                <div style="font-size:0.72rem;color:#6b7280;">Connected to your real farm data · ${today}</div>
+                            </div>
+                        </div>
+                        <div style="display:flex;align-items:center;gap:6px;font-size:0.72rem;color:#6b7280;">
+                            <div style="width:7px;height:7px;border-radius:50%;background:#059669;box-shadow:0 0 6px #059669;animation:fmPulse 2s infinite;"></div>
+                            <style>@keyframes fmPulse{0%,100%{opacity:1}50%{opacity:.4}}</style>
+                            Live
+                        </div>
+                    </div>
+
+                    <!-- Messages -->
+                    <div id="fm-messages" style="flex:1;overflow-y:auto;padding:1.25rem;display:flex;flex-direction:column;gap:1rem;">
+                        <!-- Welcome message -->
+                        <div class="fm-msg ai">
+                            <div class="fm-avatar ai">🌾</div>
+                            <div>
+                                <div class="fm-bubble">
+                                    Habari! I'm FarmMind AI — your personal farm assistant connected directly to your <strong>${window.farmData.farmName || 'Farm Tracker Pro'}</strong> data. 🌾
+                                    ${buildDailyBriefingHTML()}
+                                    Ask me anything about your farm, or tap a quick action on the left to get started!
+                                </div>
+                                <div class="fm-time">${new Date().toLocaleTimeString('en-KE',{hour:'numeric',minute:'2-digit'})}</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Quick prompt chips -->
+                    <div style="padding:0.75rem 1.25rem 0;border-top:1px solid #f3f4f6;display:flex;gap:0.5rem;flex-wrap:wrap;">
+                        <button class="fm-quick" onclick="fmSendQuick('Give me today\\'s farm briefing')">🌅 Briefing</button>
+                        <button class="fm-quick" onclick="fmSendQuick('What should I focus on today?')">🎯 Today's focus</button>
+                        <button class="fm-quick" onclick="fmSendQuick('How is my farm performing this month?')">📈 Performance</button>
+                        <button class="fm-quick" onclick="fmSendQuick('What inventory do I need to reorder?')">📦 Reorder</button>
+                        <button class="fm-quick" onclick="fmSendQuick('Give me a full farm health report')">🏥 Health report</button>
+                    </div>
+
+                    <!-- Input -->
+                    <div style="padding:0.75rem 1.25rem 1rem;">
+                        <div style="display:flex;gap:10px;align-items:flex-end;">
+                            <textarea id="fm-input" rows="1"
+                                placeholder="Ask about your livestock, finances, tasks, health, production…"
+                                onkeydown="fmHandleKey(event)"
+                                oninput="fmAutoResize(this)"
+                                style="flex:1;background:#f9fafb;border:1px solid #e5e7eb;border-radius:10px;padding:10px 14px;color:#374151;font-family:inherit;font-size:0.875rem;resize:none;outline:none;line-height:1.5;max-height:100px;transition:border-color 0.2s;"
+                                onfocus="this.style.borderColor='#059669'" onblur="this.style.borderColor='#e5e7eb'"
+                            ></textarea>
+                            <button id="fm-send-btn" onclick="fmSendMessage()"
+                                style="width:42px;height:42px;border-radius:10px;background:#059669;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:1rem;transition:all 0.2s;flex-shrink:0;color:white;"
+                                onmouseover="this.style.background='#047857'" onmouseout="this.style.background='#059669'">➤</button>
+                        </div>
+                    </div>
+                </div>
+            </div>`;
+        }
+
+        function buildLivestockStatCards() {
+            const fd = window.farmData;
+            const livestockSummary = {};
+            (fd.livestock || []).forEach(a => {
+                const type = (a.type || a.species || 'Unknown').toLowerCase();
+                if (!livestockSummary[type]) livestockSummary[type] = 0;
+                livestockSummary[type] += parseInt(a.quantity) || 1;
+            });
+
+            const emojiMap = { layers:'🐔', broilers:'🍗', cattle:'🐄', goats:'🐐', pigs:'🐷', sheep:'🐑', fish:'🐟', rabbits:'🐰', turkey:'🦃', bulls:'🐂', heifers:'🐄', duck:'🦆', geese:'🦢', bees:'🐝', 'improved kienyeji':'🐓' };
+
+            if (Object.keys(livestockSummary).length === 0) {
+                return `<div style="font-size:0.8rem;color:#9ca3af;text-align:center;padding:1rem 0;">No livestock yet.<br>Add animals in the Livestock tab.</div>`;
+            }
+
+            return Object.entries(livestockSummary).map(([type, count]) => `
+                <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 10px;background:#f9fafb;border-radius:8px;margin-bottom:6px;">
+                    <span style="font-size:0.8rem;color:#374151;">${emojiMap[type] || '🐾'} ${type.charAt(0).toUpperCase()+type.slice(1)}</span>
+                    <span style="font-weight:700;color:#059669;font-size:0.9rem;">${count.toLocaleString()}</span>
+                </div>`).join('');
+        }
+
+        function fmAutoResize(el) {
+            el.style.height = 'auto';
+            el.style.height = Math.min(el.scrollHeight, 100) + 'px';
+        }
+
+        function fmHandleKey(e) {
+            if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); fmSendMessage(); }
+        }
+
+        function fmSendQuick(text) {
+            const input = document.getElementById('fm-input');
+            if (input) { input.value = text; fmSendMessage(); }
+        }
+
+        function fmGetTime() {
+            return new Date().toLocaleTimeString('en-KE', { hour:'numeric', minute:'2-digit' });
+        }
+
+        function fmAppendMsg(role, html, time) {
+            const msgs = document.getElementById('fm-messages');
+            if (!msgs) return;
+            const div = document.createElement('div');
+            div.className = `fm-msg ${role}`;
+            const avatar = role === 'ai'
+                ? `<div class="fm-avatar ai">🌾</div>`
+                : `<div class="fm-avatar user">👤</div>`;
+            div.innerHTML = `${avatar}<div><div class="fm-bubble">${html}</div><div class="fm-time">${time || fmGetTime()}</div></div>`;
+            msgs.appendChild(div);
+            msgs.scrollTop = msgs.scrollHeight;
+        }
+
+        function fmAppendTyping() {
+            const msgs = document.getElementById('fm-messages');
+            if (!msgs) return;
+            const div = document.createElement('div');
+            div.className = 'fm-msg ai';
+            div.id = 'fm-typing';
+            div.innerHTML = `<div class="fm-avatar ai">🌾</div><div><div class="fm-bubble"><div class="fm-typing"><span></span><span></span><span></span></div></div></div>`;
+            msgs.appendChild(div);
+            msgs.scrollTop = msgs.scrollHeight;
+        }
+
+        function fmRemoveTyping() {
+            const el = document.getElementById('fm-typing');
+            if (el) el.remove();
+        }
+
+        function fmFormatResponse(text) {
+            return text
+                .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+                .replace(/\*(.*?)\*/g, '<em>$1</em>')
+                .replace(/\n\n/g, '</p><p style="margin-top:8px">')
+                .replace(/\n/g, '<br>')
+                .replace(/^/, '<p>')
+                .replace(/$/, '</p>');
+        }
+
+        async function fmSendMessage() {
+            if (farmMindLoading) return;
+            const input = document.getElementById('fm-input');
+            const sendBtn = document.getElementById('fm-send-btn');
+            if (!input) return;
+            const text = input.value.trim();
+            if (!text) return;
+
+            input.value = '';
+            input.style.height = 'auto';
+            if (sendBtn) sendBtn.disabled = true;
+            farmMindLoading = true;
+
+            fmAppendMsg('user', text);
+            farmMindHistory.push({ role: 'user', content: text });
+
+            fmAppendTyping();
+
+            try {
+                const response = await fetch('https://api.anthropic.com/v1/messages', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        model: 'claude-sonnet-4-20250514',
+                        max_tokens: 1000,
+                        system: buildFarmContext(),
+                        messages: farmMindHistory.slice(-10) // keep last 10 turns
+                    })
+                });
+
+                const data = await response.json();
+                const reply = data.content?.[0]?.text || 'Sorry, I could not get a response right now.';
+
+                farmMindHistory.push({ role: 'assistant', content: reply });
+                fmRemoveTyping();
+                fmAppendMsg('ai', fmFormatResponse(reply));
+
+            } catch (err) {
+                fmRemoveTyping();
+                fmAppendMsg('ai', '⚠️ Could not connect to FarmMind AI. Please check your internet connection and try again.');
+            }
+
+            farmMindLoading = false;
+            if (sendBtn) sendBtn.disabled = false;
+            if (input) input.focus();
         }
 
         // Execute initialization when the DOM is ready
