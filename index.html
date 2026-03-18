@@ -4,6 +4,23 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Farm Tracker Pro</title>
+    <!-- KILL OLD SERVICE WORKERS -->
+    <script>
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.getRegistrations().then(function(registrations) {
+                for (let r of registrations) {
+                    r.unregister();
+                    console.log('Unregistered SW:', r.scope);
+                }
+            });
+            caches.keys().then(function(names) {
+                for (let name of names) {
+                    caches.delete(name);
+                    console.log('Deleted cache:', name);
+                }
+            });
+        }
+    </script>
     <!-- App Icon (Favicon) -->
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><path fill='%23059669' d='M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8h5z'/></svg>">
     <!-- Apple Touch Icon for "Add to Home Screen" -->
@@ -6460,8 +6477,4 @@ TOTAL RECORDS: ${(fd.livestock||[]).length} livestock, ${(fd.transactions||[]).l
 
                     <!-- Quick prompt chips -->
                     <div style="padding:0.75rem 1.25rem 0;border-top:1px solid #f3f4f6;display:flex;gap:0.5rem;flex-wrap:wrap;">
-                        <button class="fm-quick" onclick="fmSendQuick('Give me today\\'s farm briefing')">🌅 Briefing</button>
-                        <button class="fm-quick" onclick="fmSendQuick('What should I focus on today?')">🎯 Today's focus</button>
-                        <button class="fm-quick" onclick="fmSendQuick('How is my farm performing this month?')">📈 Performance</button>
-                        <button class="fm-quick" onclick="fmSendQuick('What inventory do I need to reorder?')">📦 Reorder</button>
-                        <button class="fm-quick" onclick="fmSendQuick('Give me a full farm health
+              
