@@ -6,18 +6,33 @@
     <title>Farm Tracker Pro</title>
     <!-- KILL OLD SERVICE WORKERS -->
     <script>
+        // Catch ALL errors immediately
+        window.onerror = function(msg, src, line, col, err) {
+            document.body.style.cssText = 'background:white;padding:2rem;font-family:sans-serif;';
+            document.body.innerHTML = `
+                <h2 style="color:#dc2626;">⚠️ App Error</h2>
+                <p><b>Error:</b> ${msg}</p>
+                <p><b>Line:</b> ${line}</p>
+                <p><b>Source:</b> ${src}</p>
+                <button onclick="location.reload()" style="background:#059669;color:white;border:none;padding:10px 20px;border-radius:8px;margin-top:1rem;font-size:1rem;cursor:pointer;">Reload</button>
+            `;
+            return false;
+        };
+        window.addEventListener('unhandledrejection', function(e) {
+            document.body.style.cssText = 'background:white;padding:2rem;font-family:sans-serif;';
+            document.body.innerHTML = `
+                <h2 style="color:#dc2626;">⚠️ Promise Error</h2>
+                <p><b>Error:</b> ${e.reason}</p>
+                <button onclick="location.reload()" style="background:#059669;color:white;border:none;padding:10px 20px;border-radius:8px;margin-top:1rem;font-size:1rem;cursor:pointer;">Reload</button>
+            `;
+        });
+
         if ('serviceWorker' in navigator) {
             navigator.serviceWorker.getRegistrations().then(function(registrations) {
-                for (let r of registrations) {
-                    r.unregister();
-                    console.log('Unregistered SW:', r.scope);
-                }
+                for (let r of registrations) r.unregister();
             });
             caches.keys().then(function(names) {
-                for (let name of names) {
-                    caches.delete(name);
-                    console.log('Deleted cache:', name);
-                }
+                for (let name of names) caches.delete(name);
             });
         }
     </script>
@@ -6461,20 +6476,4 @@ TOTAL RECORDS: ${(fd.livestock||[]).length} livestock, ${(fd.transactions||[]).l
 
                     <!-- Messages -->
                     <div id="fm-messages" style="flex:1;overflow-y:auto;padding:1.25rem;display:flex;flex-direction:column;gap:1rem;">
-                        <!-- Welcome message -->
-                        <div class="fm-msg ai">
-                            <div class="fm-avatar ai">🌾</div>
-                            <div>
-                                <div class="fm-bubble">
-                                    Habari! I'm FarmMind AI — your personal farm assistant connected directly to your <strong>${window.farmData.farmName || 'Farm Tracker Pro'}</strong> data. 🌾
-                                    ${buildDailyBriefingHTML()}
-                                    Ask me anything about your farm, or tap a quick action on the left to get started!
-                                </div>
-                                <div class="fm-time">${new Date().toLocaleTimeString('en-KE',{hour:'numeric',minute:'2-digit'})}</div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Quick prompt chips -->
-                    <div style="padding:0.75rem 1.25rem 0;border-top:1px solid #f3f4f6;display:flex;gap:0.5rem;flex-wrap:wrap;">
-              
+                        <!-- Welcome message 
