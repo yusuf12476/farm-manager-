@@ -1,5 +1,5 @@
 // Farm Tracker Pro — Service Worker (Phase 5: Offline Mode)
-const CACHE_NAME = 'farm-tracker-v5';
+const CACHE_NAME = 'farm-tracker-v6';
 const ASSETS = [
   './',
   './index.html',
