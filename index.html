@@ -36,6 +36,11 @@
             });
         }
     </script>
+    <!-- Force light background immediately so splash is always visible -->
+    <style>
+        body { background-color: #f4f7f9 !important; }
+        #splash-screen { background-color: #f4f7f9 !important; }
+    </style>
     <!-- App Icon (Favicon) -->
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><path fill='%23059669' d='M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8h5z'/></svg>">
     <!-- Apple Touch Icon for "Add to Home Screen" -->
@@ -44,12 +49,12 @@
     <link rel="manifest" href="manifest.json">
     <meta name="theme-color" content="#059669">
     <!-- Load Tailwind CSS -->
-    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.tailwindcss.com" onerror="console.warn('Tailwind failed to load')"></script>
     <!-- Load Chart.js for data visualization -->
-    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js" onerror="window.Chart=function(){this.destroy=function(){}};console.warn('Chart.js failed')"></script>
     <!-- Load jsPDF and autoTable plugin for PDF generation -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>    
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf-autotable.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" onerror="console.warn('jsPDF failed')"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf-autotable.min.js" onerror="console.warn('jsPDF-autotable failed')"></script>
     
     <!-- Configure Tailwind for custom colors and font -->
     <script>
@@ -178,13 +183,14 @@
 <body class="min-h-screen">
 
     <!-- Splash Screen -->
-    <div id="splash-screen" class="fixed inset-0 bg-bg-light z-[100] flex flex-col items-center justify-center transition-opacity duration-700 ease-in-out">
-        <div class="text-center">
-            <div class="text-4xl md:text-5xl font-extrabold text-gray-800 flex items-center">
-                <svg class="w-10 h-10 md:w-12 md:h-12 mr-3 md:mr-4 gradient-text" fill="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8h5z"></path></svg>
-                Farm Tracker <span class="gradient-text ml-2">Pro</span>
+    <div id="splash-screen" style="position:fixed;inset:0;background:#f4f7f9;z-index:100;display:flex;flex-direction:column;align-items:center;justify-content:center;transition:opacity 0.7s ease-in-out;" class="fixed inset-0 bg-bg-light z-[100] flex flex-col items-center justify-center transition-opacity duration-700 ease-in-out">
+        <div class="text-center" style="text-align:center;">
+            <div style="font-size:2.5rem;font-weight:800;color:#1f2937;display:flex;align-items:center;" class="text-4xl md:text-5xl font-extrabold text-gray-800 flex items-center">
+                <svg style="width:40px;height:40px;margin-right:12px;fill:#059669;" fill="currentColor" viewBox="0 0 24 24"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8h5z"></path></svg>
+                Farm Tracker <span style="color:#059669;margin-left:8px;" class="gradient-text ml-2">Pro</span>
             </div>
-            <p class="mt-4 text-sm text-gray-500">Powered by <span class="font-semibold text-primary-green">Agri-Logic</span></p>
+            <p style="margin-top:1rem;font-size:0.875rem;color:#6b7280;" class="mt-4 text-sm text-gray-500">Powered by <span style="font-weight:600;color:#059669;" class="font-semibold text-primary-green">Agri-Logic</span></p>
+            <p id="splash-debug" style="margin-top:0.5rem;font-size:0.75rem;color:#9ca3af;">Loading...</p>
         </div>
     </div>
 
@@ -6463,17 +6469,4 @@ TOTAL RECORDS: ${(fd.livestock||[]).length} livestock, ${(fd.transactions||[]).l
                         <div style="display:flex;align-items:center;gap:10px;">
                             <div style="width:36px;height:36px;background:linear-gradient(135deg,#059669,#047857);border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:1.1rem;">🌾</div>
                             <div>
-                                <div style="font-weight:700;color:#1f2937;font-size:0.95rem;">FarmMind AI</div>
-                                <div style="font-size:0.72rem;color:#6b7280;">Connected to your real farm data · ${today}</div>
-                            </div>
-                        </div>
-                        <div style="display:flex;align-items:center;gap:6px;font-size:0.72rem;color:#6b7280;">
-                            <div style="width:7px;height:7px;border-radius:50%;background:#059669;box-shadow:0 0 6px #059669;animation:fmPulse 2s infinite;"></div>
-                            <style>@keyframes fmPulse{0%,100%{opacity:1}50%{opacity:.4}}</style>
-                            Live
-                        </div>
-                    </div>
-
-                    <!-- Messages -->
-                    <div id="fm-messages" style="flex:1;overflow-y:auto;padding:1.25rem;display:flex;flex-direction:column;gap:1rem;">
-                        <!-- Welcome message 
+                                <div st
