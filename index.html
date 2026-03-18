@@ -1849,6 +1849,8 @@
             } catch(e) {}
 
             setTimeout(showApp, 500);
+            // Initialize offline system after app is fully loaded
+            setTimeout(initOfflineSystem, 1000);
         }
 
         /** Map a collection name to its view name (some differ, e.g. transactions → finance) */
@@ -6470,9 +6472,4 @@ TOTAL RECORDS: ${(fd.livestock||[]).length} livestock, ${(fd.transactions||[]).l
                         </div>
                         <div style="display:flex;align-items:center;gap:6px;font-size:0.72rem;color:#6b7280;">
                             <div style="width:7px;height:7px;border-radius:50%;background:#059669;box-shadow:0 0 6px #059669;animation:fmPulse 2s infinite;"></div>
-                            <style>@keyframes fmPulse{0%,100%{opacity:1}50%{opacity:.4}}</style>
-                            Live
-                        </div>
-                    </div>
-
-  
+                            <style>@keyframes fmPulse{0%,100%{opacity:1}50%
