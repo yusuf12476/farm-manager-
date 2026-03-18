@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test</title>
+    <script>
+        // Kill all service workers and caches
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.getRegistrations().then(r => r.forEach(reg => reg.unregister()));
+            caches.keys().then(keys => keys.forEach(k => caches.delete(k)));
+        }
+    </script>
+</head>
+<body style="font-family:sans-serif;padding:2rem;background:#f0fdf4;">
+    <h1 style="color:#059669;">✅ Test Page Works</h1>
+    <p id="status">Checking JavaScript...</p>
+    <div id="results" style="margin-top:1rem;"></div>
+
+    <script>
+        document.getElementById('status').textContent = '✅ JavaScript is working!';
+
+        // Test localStorage
+        try {
+            localStorage.setItem('test', '1');
+            localStorage.removeItem('test');
+            addResult('✅ localStorage works');
+        } catch(e) {
+            addResult('❌ localStorage failed: ' + e.message);
+        }
+
+        // Test fetch
+        fetch('https://api.open-meteo.com/v1/forecast?latitude=0.28&longitude=34.75&current=temperature_2m&timezone=Africa/Nairobi')
+            .then(r => r.json())
+            .then(d => addResult('✅ Internet works — Kakamega temp: ' + d.current.temperature_2m + '°C'))
+            .catch(e => addResult('❌ Internet fetch failed: ' + e.message));
+
+        // Test Supabase connection
+        fetch('https://ytljklxpshegztauecgt.supabase.co/rest/v1/', {
+            headers: { 'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inl0bGprbHhwc2hlZ3p0YXVlY2d0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzMzMjEzMDMsImV4cCI6MjA4ODg5NzMwM30.-ZKyjnBVATmDKDdz9ZEIyYPkX1DqRD836p7fIpU4NwI' }
+        })
+            .then(r => addResult('✅ Supabase reachable — status: ' + r.status))
+            .catch(e => addResult('❌ Supabase failed: ' + e.message));
+
+        // Show SW status
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.getRegistrations().then(regs => {
+                addResult('📋 Service workers found: ' + regs.length + (regs.length > 0 ? ' (killing them...)' : ' (none — good!)'));
+            });
+        }
+
+        function addResult(msg) {
+            const div = document.createElement('div');
+            div.style.cssText = 'padding:8px 12px;margin:4px 0;background:white;border-radius:8px;border:1px solid #e5e7eb;font-size:0.9rem;';
+            div.textContent = msg;
+            document.getElementById('results').appendChild(div);
+        }
+    </script>
+</body>
+</html>
