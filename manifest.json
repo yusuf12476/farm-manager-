@@ -1,0 +1,45 @@
+{
+  "name": "Farm Tracker Pro",
+  "short_name": "FarmTracker",
+  "description": "Complete farm management — livestock, finances, AI assistant & more",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#f4f7f9",
+  "theme_color": "#059669",
+  "categories": ["productivity", "business", "utilities"],
+  "icons": [
+    {
+      "src": "icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Dashboard",
+      "short_name": "Dashboard",
+      "description": "Open farm dashboard",
+      "url": "./index.html#dashboard",
+      "icons": [{ "src": "icon.svg", "sizes": "any" }]
+    },
+    {
+      "name": "FarmMind AI",
+      "short_name": "AI Chat",
+      "description": "Ask your farm AI assistant",
+      "url": "./index.html#farmmind",
+      "icons": [{ "src": "icon.svg", "sizes": "any" }]
+    },
+    {
+      "name": "AI Alerts",
+      "short_name": "Alerts",
+      "description": "View farm alerts",
+      "url": "./index.html#aialerts",
+      "icons": [{ "src": "icon.svg", "sizes": "any" }]
+    }
+  ],
+  "screenshots": [],
+  "prefer_related_applications": false
+}
