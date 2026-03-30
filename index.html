@@ -809,10 +809,11 @@
         </div>
 
         <!-- Navigation Tabs -->
-        <nav class="border-b-2 border-gray-200 mb-8 relative" id="main-nav">
+        <nav class="border-b-2 border-gray-200 mb-8 relative z-30" id="main-nav">
             <style>
                 /* Dropdown nav styles */
                 .nav-dropdown-group { position: relative; display: inline-block; }
+                .nav-dropdown-group:hover, .nav-dropdown-group.open { z-index: 50; }
                 .nav-dropdown-group .nav-drop-menu {
                     display: none; position: absolute; top: calc(100% + 4px); left: 0;
                     background: white; border: 1px solid #e5e7eb; border-radius: 12px;
@@ -934,7 +935,7 @@
             </div>
 
             <!-- DESKTOP: Grouped nav -->
-            <div class="hidden md:flex items-center pb-0 -mb-0.5 gap-0 overflow-x-auto nav-scrollbar">
+            <div class="hidden md:flex items-center pb-0 -mb-0.5 gap-0">
                 <!-- Core tabs -->
                 <button onclick="changeView('dashboard')" id="tab-dashboard" class="nav-main-btn active-tab">🏠 Dashboard</button>
                 <button onclick="changeView('livestock')" id="tab-livestock" class="nav-main-btn">🐄 Livestock</button>
