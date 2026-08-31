@@ -18625,7 +18625,8 @@ If the image is too dark or unclear to analyse, set severity to low and say so i
                 const res = await fetch(`${url}/health`, { signal: AbortSignal.timeout(5000) });
                 if (res.ok) {
                     if(msgEl) msgEl.textContent = '✅ AI server is online and responding!';
-                    document.getElementById('ai-status-server').querySelector('.w-3').style.background = '#059669';
+                    const statusDot = document.getElementById('ai-status-server')?.querySelector('div');
+                    if (statusDot) statusDot.style.background = '#059669';
                 } else {
                     if(msgEl) msgEl.textContent = `⚠️ Server responded with status ${res.status}`;
                 }
