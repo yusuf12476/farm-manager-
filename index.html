@@ -18184,6 +18184,19 @@ TOTAL RECORDS: ${(fd.livestock||[]).length} livestock, ${(fd.transactions||[]).l
             setTimeout(() => renderPushPanel(), 600);
         };
 
+        // Maps the simulator's short keys to the full alert type strings the backend expects
+        const BACKEND_ALERT_TYPE_MAP = {
+            intruder: 'intruder_detected',
+            animal: 'animal_health_alert',
+            fire: 'fire_smoke_detected',
+            gate: 'gate_left_open',
+            theft: 'possible_theft',
+            motion: 'motion_detected',
+            feed: 'feed_level_low',
+            water: 'water_system_issue',
+            rodent: 'rodent_detected',
+        };
+
         window.simulateAlert = function(type) {
             const cameras = getCameraConfig ? getCameraConfig() : [];
             const camNames = cameras.map(c => c.name);
@@ -18202,6 +18215,39 @@ TOTAL RECORDS: ${(fd.livestock||[]).length} livestock, ${(fd.transactions||[]).l
             const severities = { intruder:'critical', fire:'critical', theft:'critical', animal:'high', gate:'medium', motion:'low', feed:'medium', water:'medium', rodent:'medium' };
             addAlert(type, randomCam, descriptions[type] || 'Alert triggered', severities[type] || 'medium');
             renderAIAlerts();
+
+            // Also push to the backend so it can dispatch a real WhatsApp message
+            const backendUrl = localStorage.getItem('aiServerUrl');
+            const whatsappNumber = localStorage.getItem('whatsappNumber');
+            const backendType = BACKEND_ALERT_TYPE_MAP[type];
+            if (backendUrl && backendType) {
+                fetch(`${backendUrl}/alert`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        type: backendType,
+                        message: descriptions[type] || 'Alert triggered',
+                        source: 'test_simulator',
+                        to: whatsappNumber || undefined,
+                    }),
+                    signal: AbortSignal.timeout(8000),
+                })
+                .then(res => res.json())
+                .then(data => {
+                    if (data?.whatsapp?.sent) {
+                        showToast('📲 WhatsApp alert sent!', 'success');
+                    } else if (data?.whatsapp?.reason === 'no_destination_number') {
+                        showToast('⚠️ Add your WhatsApp number above to receive alerts', 'warning');
+                    } else if (data?.whatsapp?.reason === 'twilio_not_configured') {
+                        showToast('⚠️ WhatsApp not configured on backend yet', 'warning');
+                    } else if (data?.whatsapp && !data.whatsapp.sent) {
+                        showToast('⚠️ WhatsApp send failed — check backend logs', 'warning');
+                    }
+                })
+                .catch(() => {
+                    // Backend unreachable — local simulation above already ran, so fail silently here
+                });
+            }
         };
 
         window.saveAIServerUrl = function() {
