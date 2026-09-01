@@ -18024,7 +18024,7 @@ TOTAL RECORDS: ${(fd.livestock||[]).length} livestock, ${(fd.transactions||[]).l
 
             <!-- ── AI BACKEND STATUS ── -->
             <div class="aia-card">
-                <div class="aia-card-header aia-section-collapse" onclick="(function(){var b=document.getElementById('aia-be-body');b.style.display=b.style.display==='none'?'block':'none';})()">
+                <div class="aia-card-header aia-section-collapse" onclick="(function(){var b=document.getElementById('aia-be-body');var wasHidden=b.style.display==='none';b.style.display=wasHidden?'block':'none';if(wasHidden && localStorage.getItem('aiServerUrl')){testAIConnection();}})()">
                     <div style="display:flex;align-items:center;gap:10px;">
                         <span style="font-size:1.3rem;">🧠</span>
                         <div>
@@ -18037,16 +18037,16 @@ TOTAL RECORDS: ${(fd.livestock||[]).length} livestock, ${(fd.transactions||[]).l
                 <div id="aia-be-body" style="display:none;padding:0 18px 18px;">
                     <div style="display:grid;grid-template-columns:1fr;gap:8px;margin-bottom:14px;">
                         <div id="ai-status-yolo" style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:#f9fafb;border-radius:10px;border:1px solid #e5e7eb;">
-                            <div style="width:10px;height:10px;border-radius:50%;background:#d1d5db;flex-shrink:0;"></div>
-                            <div><div style="font-size:0.82rem;font-weight:600;color:#374151;">YOLOv8 Vision</div><div style="font-size:0.72rem;color:#9ca3af;">Not connected · Needs PC setup</div></div>
+                            <div id="ai-status-yolo-dot" style="width:10px;height:10px;border-radius:50%;background:#d1d5db;flex-shrink:0;"></div>
+                            <div><div style="font-size:0.82rem;font-weight:600;color:#374151;">YOLOv8 Vision</div><div id="ai-status-yolo-text" style="font-size:0.72rem;color:#9ca3af;">Runs on a separate PC · see setup guide</div></div>
                         </div>
                         <div id="ai-status-whatsapp" style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:#f9fafb;border-radius:10px;border:1px solid #e5e7eb;">
-                            <div style="width:10px;height:10px;border-radius:50%;background:#d1d5db;flex-shrink:0;"></div>
-                            <div><div style="font-size:0.82rem;font-weight:600;color:#374151;">WhatsApp Alerts</div><div style="font-size:0.72rem;color:#9ca3af;">Not configured · Needs Twilio</div></div>
+                            <div id="ai-status-whatsapp-dot" style="width:10px;height:10px;border-radius:50%;background:#d1d5db;flex-shrink:0;"></div>
+                            <div><div style="font-size:0.82rem;font-weight:600;color:#374151;">WhatsApp Alerts</div><div id="ai-status-whatsapp-text" style="font-size:0.72rem;color:#9ca3af;">Not configured · Needs Twilio</div></div>
                         </div>
                         <div id="ai-status-server" style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:#f9fafb;border-radius:10px;border:1px solid #e5e7eb;">
-                            <div style="width:10px;height:10px;border-radius:50%;background:#d1d5db;flex-shrink:0;"></div>
-                            <div><div style="font-size:0.82rem;font-weight:600;color:#374151;">Backend Server</div><div style="font-size:0.72rem;color:#9ca3af;">Not deployed · Needs VPS</div></div>
+                            <div id="ai-status-server-dot" style="width:10px;height:10px;border-radius:50%;background:#d1d5db;flex-shrink:0;"></div>
+                            <div><div style="font-size:0.82rem;font-weight:600;color:#374151;">Backend Server</div><div id="ai-status-server-text" style="font-size:0.72rem;color:#9ca3af;">Not deployed · Needs VPS</div></div>
                         </div>
                     </div>
                     <div id="ai-connection-msg" style="font-size:0.75rem;color:#6b7280;margin-bottom:10px;"></div>
@@ -18662,6 +18662,11 @@ If the image is too dark or unclear to analyse, set severity to low and say so i
         window.testAIConnection = async function() {
             const url = localStorage.getItem('aiServerUrl');
             const msgEl = document.getElementById('ai-connection-msg');
+            const serverDot = document.getElementById('ai-status-server-dot');
+            const serverText = document.getElementById('ai-status-server-text');
+            const whatsappDot = document.getElementById('ai-status-whatsapp-dot');
+            const whatsappText = document.getElementById('ai-status-whatsapp-text');
+
             if (!url) {
                 if(msgEl) msgEl.textContent = '⚠️ No server URL configured above';
                 return;
@@ -18671,13 +18676,28 @@ If the image is too dark or unclear to analyse, set severity to low and say so i
                 const res = await fetch(`${url}/health`, { signal: AbortSignal.timeout(5000) });
                 if (res.ok) {
                     if(msgEl) msgEl.textContent = '✅ AI server is online and responding!';
-                    const statusDot = document.getElementById('ai-status-server')?.querySelector('div');
-                    if (statusDot) statusDot.style.background = '#059669';
+                    if (serverDot) serverDot.style.background = '#059669';
+                    if (serverText) { serverText.textContent = 'Connected'; serverText.style.color = '#059669'; }
+
+                    // The backend reports whether Twilio/WhatsApp is actually configured server-side
+                    let data = {};
+                    try { data = await res.json(); } catch (e) { /* non-JSON response, ignore */ }
+                    if (data.whatsappConfigured) {
+                        if (whatsappDot) whatsappDot.style.background = '#059669';
+                        if (whatsappText) { whatsappText.textContent = 'Configured via Twilio'; whatsappText.style.color = '#059669'; }
+                    } else {
+                        if (whatsappDot) whatsappDot.style.background = '#d1d5db';
+                        if (whatsappText) { whatsappText.textContent = 'Not configured · Needs Twilio'; whatsappText.style.color = '#9ca3af'; }
+                    }
                 } else {
                     if(msgEl) msgEl.textContent = `⚠️ Server responded with status ${res.status}`;
+                    if (serverDot) serverDot.style.background = '#dc2626';
+                    if (serverText) { serverText.textContent = 'Server error'; serverText.style.color = '#dc2626'; }
                 }
             } catch(e) {
                 if(msgEl) msgEl.textContent = '❌ Could not reach server — check URL or deploy backend first';
+                if (serverDot) serverDot.style.background = '#dc2626';
+                if (serverText) { serverText.textContent = 'Not reachable'; serverText.style.color = '#dc2626'; }
             }
         };
 
