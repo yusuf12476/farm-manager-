@@ -17925,26 +17925,6 @@ TOTAL RECORDS: ${(fd.livestock||[]).length} livestock, ${(fd.transactions||[]).l
                 </div>
             </div>
 
-            <!-- ── TEST ALERT SIMULATOR ── -->
-            <div class="aia-card">
-                <div class="aia-card-header">
-                    <div style="display:flex;align-items:center;gap:10px;">
-                        <span style="font-size:1.1rem;">🧪</span>
-                        <div>
-                            <div style="font-weight:700;font-size:0.9rem;color:#1f2937;">Test Alert Simulator</div>
-                            <div style="font-size:0.72rem;color:#9ca3af;">Fire a test alert to check your notification setup</div>
-                        </div>
-                    </div>
-                </div>
-                <div style="padding:0 18px 18px;display:grid;grid-template-columns:repeat(2,1fr);gap:8px;">
-                    ${Object.entries(ALERT_TYPES).filter(([k]) => k !== 'clear').slice(0,8).map(([key, val]) => `
-                    <button onclick="simulateAlert('${key}')" class="aia-test-btn"
-                        style="color:${val.color};border-color:${val.border};background:${val.bg};">
-                        <div style="font-size:1.4rem;margin-bottom:4px;">${val.icon}</div>
-                        <div style="font-size:0.72rem;">${val.label}</div>
-                    </button>`).join('')}
-                </div>
-            </div>
             `;
         }
 
@@ -18049,72 +18029,6 @@ TOTAL RECORDS: ${(fd.livestock||[]).length} livestock, ${(fd.transactions||[]).l
             saveAlerts([]);
             renderAIAlerts();
             setTimeout(() => renderPushPanel(), 600);
-        };
-
-        // Maps the simulator's short keys to the full alert type strings the backend expects
-        const BACKEND_ALERT_TYPE_MAP = {
-            intruder: 'intruder_detected',
-            animal: 'animal_health_alert',
-            fire: 'fire_smoke_detected',
-            gate: 'gate_left_open',
-            theft: 'possible_theft',
-            motion: 'motion_detected',
-            feed: 'feed_level_low',
-            water: 'water_system_issue',
-            rodent: 'rodent_detected',
-        };
-
-        window.simulateAlert = function(type) {
-            const cameras = getCameraConfig ? getCameraConfig() : [];
-            const camNames = cameras.map(c => c.name);
-            const randomCam = camNames.length > 0 ? camNames[Math.floor(Math.random() * camNames.length)] : 'Camera 1';
-            const descriptions = {
-                intruder: 'Unknown person detected near fence line',
-                animal: 'Animal showing abnormal lying behavior for 30+ minutes',
-                fire: 'Smoke detected in feed store area',
-                gate: 'Main gate detected open — no activity for 15 minutes',
-                theft: 'Animal movement detected outside enclosure at night',
-                motion: 'Motion detected in restricted area',
-                feed: 'Feed bin level below 20%',
-                water: 'Water flow anomaly detected at drinking station',
-                rodent: 'Small animal movement detected in grain store',
-            };
-            const severities = { intruder:'critical', fire:'critical', theft:'critical', animal:'high', gate:'medium', motion:'low', feed:'medium', water:'medium', rodent:'medium' };
-            addAlert(type, randomCam, descriptions[type] || 'Alert triggered', severities[type] || 'medium');
-            renderAIAlerts();
-
-            // Also push to the backend so it can dispatch a real WhatsApp message
-            const backendUrl = localStorage.getItem('aiServerUrl');
-            const whatsappNumber = localStorage.getItem('whatsappNumber');
-            const backendType = BACKEND_ALERT_TYPE_MAP[type];
-            if (backendUrl && backendType) {
-                fetch(`${backendUrl}/alert`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        type: backendType,
-                        message: descriptions[type] || 'Alert triggered',
-                        source: 'test_simulator',
-                        to: whatsappNumber || undefined,
-                    }),
-                    signal: AbortSignal.timeout(8000),
-                })
-                .then(res => res.json())
-                .then(data => {
-                    if (data?.whatsapp?.sent) {
-                        showToast('📲 WhatsApp alert sent!', 'success');
-                    } else if (data?.whatsapp?.reason === 'no_destination_number') {
-                        showToast('⚠️ Add your WhatsApp number above to receive alerts', 'warning');
-                    } else if (data?.whatsapp?.reason === 'twilio_not_configured') {
-                        showToast('⚠️ WhatsApp not configured on backend yet', 'warning');
-                    } else if (data?.whatsapp && !data.whatsapp.sent) {
-                        showToast('⚠️ WhatsApp send failed — check backend logs', 'warning');
-                    }
-                })
-                .catch(() => {
-                    // Backend unreachable — local simulation above already ran, so fail silently here
-                });
-            }
         };
 
         window.saveAIServerUrl = function() {
