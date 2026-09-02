@@ -7856,7 +7856,7 @@ window._LOGO_B64 = "data:image/jpeg;base64,/9j/4QCCRXhpZgAATU0AKgAAAAgABAEAAAMAA
                 disease:         { icon:'🔬', name:'AI Disease Diagnosis',           desc:'Photo-based disease detection powered by Claude Vision AI' },
                 aialerts:        { icon:'🤖', name:'Smart AI Security Alerts',       desc:'Intelligent motion and anomaly alerts from cameras & sensors' },
                 proactiveai:     { icon:'📊', name:'AI Farm Insights',               desc:'Proactive analysis — overdue tasks, low stock, calving alerts & profit summary' },
-                morningbrief:    { icon:'🌅', name:'WhatsApp Morning Briefings',     desc:'Daily farm summary delivered to your WhatsApp every morning' },
+                morningbrief:    { icon:'🌅', name:'Automated Morning Briefings',     desc:'Daily farm summary delivered to your phone via SMS every morning' },
                 marketprices:    { icon:'📈', name:'Live Market Price Tracker',      desc:'Real-time livestock and produce prices from your local and regional markets' },
                 weather:         { icon:'🌤️', name:'Weather & Market Dashboard',     desc:'7-day forecast, planting advisories and commodity price trends' },
                 feedvsrev:       { icon:'📊', name:'Feed vs Revenue Analytics',      desc:'Compare feed costs against production revenue per enterprise' },
@@ -17832,11 +17832,11 @@ TOTAL RECORDS: ${(fd.livestock||[]).length} livestock, ${(fd.transactions||[]).l
                     <div style="display:flex;align-items:center;gap:10px;">
                         <span style="font-size:1.3rem;">📱</span>
                         <div>
-                            <div style="font-weight:700;font-size:0.9rem;color:#1f2937;">WhatsApp Morning Briefing</div>
-                            <div style="font-size:0.72rem;color:#9ca3af;margin-top:1px;">Daily farm summary sent to your WhatsApp</div>
+                            <div style="font-weight:700;font-size:0.9rem;color:#1f2937;">SMS Morning Briefing</div>
+                            <div style="font-size:0.72rem;color:#9ca3af;margin-top:1px;">Daily farm summary sent to your phone via SMS</div>
                         </div>
                     </div>
-                    <button onclick="event.stopPropagation();sendWhatsAppBriefing();" class="aia-btn" style="background:#25d366;color:white;">📤 Send Now</button>
+                    <button onclick="event.stopPropagation();sendSmsBriefing();" class="aia-btn" style="background:#059669;color:white;">📤 Send Now</button>
                 </div>
                 <div id="aia-wa-body" style="padding:0 18px 16px;">
                     <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:11px;padding:12px 14px;font-family:monospace;font-size:0.75rem;color:#166534;white-space:pre-wrap;line-height:1.6;margin-bottom:10px;">${buildWhatsAppBriefing()}</div>
@@ -17854,7 +17854,7 @@ TOTAL RECORDS: ${(fd.livestock||[]).length} livestock, ${(fd.transactions||[]).l
                         <span style="font-size:1.3rem;">⚙️</span>
                         <div>
                             <div style="font-weight:700;font-size:0.9rem;color:#1f2937;">Alert Configuration</div>
-                            <div style="font-size:0.72rem;color:#9ca3af;margin-top:1px;">WhatsApp number, sensitivity & alert types</div>
+                            <div style="font-size:0.72rem;color:#9ca3af;margin-top:1px;">Phone number, sensitivity & alert types</div>
                         </div>
                     </div>
                     <span style="color:#9ca3af;font-size:0.8rem;">▾</span>
@@ -17862,7 +17862,7 @@ TOTAL RECORDS: ${(fd.livestock||[]).length} livestock, ${(fd.transactions||[]).l
                 <div id="aia-cfg-body" style="display:none;padding:0 18px 18px;">
                     <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px;">
                         <div>
-                            <div style="font-size:0.72rem;font-weight:600;color:#6b7280;margin-bottom:5px;">WhatsApp Number</div>
+                            <div style="font-size:0.72rem;font-weight:600;color:#6b7280;margin-bottom:5px;">Phone Number (for SMS alerts)</div>
                             <input type="text" id="whatsapp-number" style="width:100%;padding:9px 11px;border:1px solid #e5e7eb;border-radius:9px;font-size:0.83rem;box-sizing:border-box;" placeholder="+254 7XX XXX XXX" value="${localStorage.getItem('whatsappNumber')||''}">
                         </div>
                         <div>
@@ -17907,9 +17907,9 @@ TOTAL RECORDS: ${(fd.livestock||[]).length} livestock, ${(fd.transactions||[]).l
                             <div id="ai-status-yolo-dot" style="width:10px;height:10px;border-radius:50%;background:#d1d5db;flex-shrink:0;"></div>
                             <div><div style="font-size:0.82rem;font-weight:600;color:#374151;">YOLOv8 Vision</div><div id="ai-status-yolo-text" style="font-size:0.72rem;color:#9ca3af;">Runs on a separate PC · see setup guide</div></div>
                         </div>
-                        <div id="ai-status-whatsapp" style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:#f9fafb;border-radius:10px;border:1px solid #e5e7eb;">
-                            <div id="ai-status-whatsapp-dot" style="width:10px;height:10px;border-radius:50%;background:#d1d5db;flex-shrink:0;"></div>
-                            <div><div style="font-size:0.82rem;font-weight:600;color:#374151;">WhatsApp Alerts</div><div id="ai-status-whatsapp-text" style="font-size:0.72rem;color:#9ca3af;">Not configured · Needs Twilio</div></div>
+                        <div id="ai-status-sms" style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:#f9fafb;border-radius:10px;border:1px solid #e5e7eb;">
+                            <div id="ai-status-sms-dot" style="width:10px;height:10px;border-radius:50%;background:#d1d5db;flex-shrink:0;"></div>
+                            <div><div style="font-size:0.82rem;font-weight:600;color:#374151;">SMS Alerts</div><div id="ai-status-sms-text" style="font-size:0.72rem;color:#9ca3af;">Not configured · Needs Twilio</div></div>
                         </div>
                         <div id="ai-status-server" style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:#f9fafb;border-radius:10px;border:1px solid #e5e7eb;">
                             <div id="ai-status-server-dot" style="width:10px;height:10px;border-radius:50%;background:#d1d5db;flex-shrink:0;"></div>
@@ -18245,8 +18245,8 @@ TOTAL RECORDS: ${(fd.livestock||[]).length} livestock, ${(fd.transactions||[]).l
             const msgEl = document.getElementById('ai-connection-msg');
             const serverDot = document.getElementById('ai-status-server-dot');
             const serverText = document.getElementById('ai-status-server-text');
-            const whatsappDot = document.getElementById('ai-status-whatsapp-dot');
-            const whatsappText = document.getElementById('ai-status-whatsapp-text');
+            const smsDot = document.getElementById('ai-status-sms-dot');
+            const smsText = document.getElementById('ai-status-sms-text');
 
             if (!url) {
                 if(msgEl) msgEl.textContent = '⚠️ No server URL configured above';
@@ -18260,15 +18260,15 @@ TOTAL RECORDS: ${(fd.livestock||[]).length} livestock, ${(fd.transactions||[]).l
                     if (serverDot) serverDot.style.background = '#059669';
                     if (serverText) { serverText.textContent = 'Connected'; serverText.style.color = '#059669'; }
 
-                    // The backend reports whether Twilio/WhatsApp is actually configured server-side
+                    // The backend reports whether Twilio SMS is actually configured server-side
                     let data = {};
                     try { data = await res.json(); } catch (e) { /* non-JSON response, ignore */ }
-                    if (data.whatsappConfigured) {
-                        if (whatsappDot) whatsappDot.style.background = '#059669';
-                        if (whatsappText) { whatsappText.textContent = 'Configured via Twilio'; whatsappText.style.color = '#059669'; }
+                    if (data.smsConfigured) {
+                        if (smsDot) smsDot.style.background = '#059669';
+                        if (smsText) { smsText.textContent = 'Configured via Twilio'; smsText.style.color = '#059669'; }
                     } else {
-                        if (whatsappDot) whatsappDot.style.background = '#d1d5db';
-                        if (whatsappText) { whatsappText.textContent = 'Not configured · Needs Twilio'; whatsappText.style.color = '#9ca3af'; }
+                        if (smsDot) smsDot.style.background = '#d1d5db';
+                        if (smsText) { smsText.textContent = 'Not configured · Needs Twilio'; smsText.style.color = '#9ca3af'; }
                     }
                 } else {
                     if(msgEl) msgEl.textContent = `⚠️ Server responded with status ${res.status}`;
@@ -19495,17 +19495,19 @@ yusuf12476.github.io/farm-manager-`;
         const _origRenderSettings = window.renderSettings || function(){};
         // WhatsApp briefing is rendered directly inside renderAIAlerts below
 
-        window.sendWhatsAppBriefing = function() {
+        window.sendSmsBriefing = function() {
             const number = document.getElementById('briefing-number')?.value?.trim() || localStorage.getItem('whatsappNumber') || '';
             if (number) localStorage.setItem('whatsappNumber', number);
+            if (!number) { showToast('⚠️ Enter a phone number first', 'warning'); return; }
             const message = buildWhatsAppBriefing();
             const encoded = encodeURIComponent(message);
-            const cleanNumber = number.replace(/\D/g,'');
-            const url = cleanNumber
-                ? `https://wa.me/${cleanNumber}?text=${encoded}`
-                : `https://wa.me/?text=${encoded}`;
-            window.open(url, '_blank');
+            const cleanNumber = number.replace(/[^\d+]/g,'');
+            // sms: URI opens the device's SMS composer with the text pre-filled —
+            // works on mobile; desktop browsers without a default SMS handler will
+            // just show a "no app found" prompt, so Copy is the reliable fallback there.
+            window.location.href = `sms:${cleanNumber}?body=${encoded}`;
         };
+        window.sendWhatsAppBriefing = window.sendSmsBriefing; // kept for compatibility with any old bookmarks/links
 
         window.copyBriefing = function() {
             const text = buildWhatsAppBriefing();
