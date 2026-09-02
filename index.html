@@ -19918,28 +19918,22 @@ Please diagnose and recommend treatment.`;
                 .fm-btn-green:hover { background:#047857; }
                 .fm-btn-blue { padding:9px 20px; background:#3b82f6; color:#fff; border:none; border-radius:9px; font-weight:700; font-size:0.84rem; cursor:pointer; transition:background 0.2s; white-space:nowrap; }
                 .fm-btn-blue:hover { background:#2563eb; }
-                .mapboxgl-ctrl-attrib { font-size:10px !important; }
-                .mapboxgl-popup-content { border-radius:12px !important; box-shadow:0 8px 24px rgba(0,0,0,0.15) !important; padding:14px 16px !important; font-family:inherit; }
-                .mapboxgl-popup-close-button { font-size:18px; right:6px; top:4px; color:#6b7280; }
-                /* Google Maps emoji marker fix */
-                .gm-emoji-label { font-size:22px !important; line-height:1 !important; margin-top:-11px; filter:drop-shadow(0 2px 6px rgba(0,0,0,0.5)); }
-                .gm-style .gm-style-iw-c { border-radius:12px !important; padding:0 !important; box-shadow:0 8px 24px rgba(0,0,0,0.15) !important; }
-                .gm-style .gm-style-iw-d { overflow:hidden !important; padding:14px 16px !important; }
-                .gm-style .gm-style-iw-t::after { display:none; }
-                .gm-style-iw-tc { display:none; }
-                .gm-ui-hover-effect { top:4px !important; right:4px !important; }
+                .leaflet-popup-content-wrapper { border-radius:12px !important; box-shadow:0 8px 24px rgba(0,0,0,0.15) !important; }
+                .leaflet-popup-content { margin:14px 16px !important; }
+                .leaflet-popup-close-button { font-size:18px !important; }
+                .leaflet-control-attribution { font-size:10px !important; }
             </style>
 
             <div style="display:flex;flex-wrap:wrap;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:16px">
                 <div>
                     <h2 style="font-size:1.6rem;font-weight:800;color:#111827;margin:0;display:flex;align-items:center;gap:10px">
                         🛰️ Farm Map
-                        <span style="font-size:0.65rem;font-weight:700;background:#4285F4;color:#fff;padding:3px 9px;border-radius:20px;letter-spacing:1px;vertical-align:middle">GOOGLE MAPS</span>
+                        <span style="font-size:0.65rem;font-weight:700;background:#059669;color:#fff;padding:3px 9px;border-radius:20px;letter-spacing:1px;vertical-align:middle">FREE · NO API KEY</span>
                     </h2>
                     <p style="color:#6b7280;font-size:0.82rem;margin-top:4px">Satellite imagery · Place markers · Draw zones · Measure distances</p>
                 </div>
                 <div style="display:flex;gap:8px">
-                    <button onclick="fmOpenInGoogleMaps()" style="padding:8px 16px;background:#fff;border:1px solid #e5e7eb;border-radius:10px;font-size:0.8rem;font-weight:600;color:#374151;cursor:pointer">🌐 Google Maps</button>
+                    <button onclick="fmOpenInGoogleMaps()" style="padding:8px 16px;background:#fff;border:1px solid #e5e7eb;border-radius:10px;font-size:0.8rem;font-weight:600;color:#374151;cursor:pointer">🌐 Open in Google Maps</button>
                     <button onclick="fmResetMap()" style="padding:8px 16px;background:#fff1f2;border:1px solid #fecaca;border-radius:10px;font-size:0.8rem;font-weight:600;color:#dc2626;cursor:pointer">🗑️ Reset</button>
                 </div>
             </div>
@@ -19974,7 +19968,7 @@ Please diagnose and recommend treatment.`;
                             <div id="fm-search-results"></div>
                         </div>
                         <div class="fm-float" id="fm-style-bar">
-                            <button class="fm-sty-btn" id="fm-sty-hybrid" onclick="fmSetStyle('hybrid',this)" title="Satellite + Labels (Google default)">🛰️</button>
+                            <button class="fm-sty-btn" id="fm-sty-hybrid" onclick="fmSetStyle('hybrid',this)" title="Satellite + Labels">🛰️</button>
                             <button class="fm-sty-btn" id="fm-sty-satellite-v9" onclick="fmSetStyle('satellite-v9',this)" title="Pure Satellite">🌍</button>
                             <button class="fm-sty-btn" id="fm-sty-outdoors-v12" onclick="fmSetStyle('outdoors-v12',this)" title="Terrain / Topo">🏔️</button>
                             <button class="fm-sty-btn" id="fm-sty-streets-v12" onclick="fmSetStyle('streets-v12',this)" title="Street Map">🏘️</button>
@@ -19984,7 +19978,6 @@ Please diagnose and recommend treatment.`;
                             <button class="fm-tool-btn active" id="fm-tool-pin" onclick="fmSetTool('pin',this)">📍 Pin</button>
                             <button class="fm-tool-btn" id="fm-tool-measure" onclick="fmSetTool('measure',this)">📏 Measure</button>
                             <button class="fm-tool-btn" id="fm-tool-zone" onclick="fmSetTool('zone',this)">✏️ Draw Zone</button>
-                            <button class="fm-tool-btn" id="fm-tool-3d" onclick="fmToggle3D()">🏔️ 3D</button>
                             <button class="fm-tool-btn danger" onclick="fmClearMarkers()">🗑️ Clear Pins</button>
                         </div>
                         <div class="fm-float" id="fm-coords-readout">
@@ -20000,7 +19993,7 @@ Please diagnose and recommend treatment.`;
                     </div>
                     <div style="display:flex;flex-wrap:wrap;gap:14px;margin-top:10px;font-size:0.72rem;color:#9ca3af">
                         <span>📍 Click to drop pin</span><span>🖱️ Drag to pan</span><span>🔍 Scroll to zoom</span>
-                        <span>📏 Measure distances</span><span>✏️ Draw zones</span><span>🏔️ Toggle 3D terrain</span>
+                        <span>📏 Measure distances</span><span>✏️ Draw zones</span>
                     </div>
                 </div>
 
@@ -20046,60 +20039,49 @@ Please diagnose and recommend treatment.`;
                 </div>
             </div>
             `;
-            fmLoadMapbox();
+            fmLoadLeafletMap();
         }
 
-        // ── GOOGLE MAPS ENGINE ───────────────────────────────────────
-        // Uses Google Maps JavaScript API — exact same tiles as google.com/maps
-        // Free tier: 28,000 map loads/month
-        // To use your own key: replace the key in fmLoadGoogleMaps() below
-        // ────────────────────────────────────────────────────────────
+        // ── LEAFLET MAP ENGINE ──────────────────────────────────────────
+        // Free, no API key required: Esri World Imagery + OpenStreetMap tiles,
+        // OpenTopoMap for terrain, Nominatim for search.
+        // ─────────────────────────────────────────────────────────────
 
-        let _gmMap = null;           // google.maps.Map instance
-        let _gmInfoWindow = null;    // shared InfoWindow
-        let _gmGmMarkers = {};       // i → google.maps.Marker
-        let _gmCentreMarker = null;
-        let _gmBoundaryCircle = null;
-        let _gmBoundaryPolygon = null;
-        let _gmPolylines = [];       // measure / zone polylines
-        let _gmZonePolygons = [];    // drawn zone polygons
-        let _gmMeasurePath = null;   // google.maps.Polyline for measure
-        let _gmMeasureDots = [];     // measure point markers
-        let _gmZonePreview = null;   // preview polyline while drawing
-        let _gmPlacesService = null;
-        let _gmSearchTimer = null;
-        let _gmCurrentTool = 'pin';  // 'pin' | 'measure' | 'zone'
+        let _fmLMap = null;              // L.map instance
+        let _fmLMarkers = {};            // i → L.marker
+        let _fmLCentreMarker = null;
+        let _fmLBoundaryCircle = null;
+        let _fmLMeasureLine = null;
+        let _fmLMeasureDots = [];
+        let _fmLZonePreviewLine = null;
+        let _fmLZonePolygons = [];
+        let _fmLCurrentTool = 'pin';
+        let _fmLSearchTimer = null;
+        let _fmLTileLayer = null;
+        let _fmLLabelsLayer = null;      // overlay for hybrid mode
 
-        // Map type IDs
-        const GM_TYPES = {
-            satellite: 'satellite',   // pure satellite (no labels) — Google default
-            hybrid:    'hybrid',      // satellite + labels = google.com/maps default
-            roadmap:   'roadmap',     // street map
-            terrain:   'terrain',     // terrain / topo
+        const FM_TILE_LAYERS = {
+            satellite: () => L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { attribution: 'Tiles &copy; Esri', maxZoom: 19 }),
+            labels: () => L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}', { attribution: '', maxZoom: 19 }),
+            terrain: () => L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', { attribution: 'Map data: &copy; OpenStreetMap contributors, SRTM | Map style: &copy; OpenTopoMap (CC-BY-SA)', maxZoom: 17 }),
+            streets: () => L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '&copy; OpenStreetMap contributors', maxZoom: 19 }),
         };
 
-        function fmLoadMapbox() { fmLoadGoogleMaps(); } // alias kept for renderFarmMap call
-
-        function fmLoadGoogleMaps() {
-            if (window.google && window.google.maps) { fmInitGoogleMap(); return; }
-            // Use Google Maps JS API — free public access key (no billing needed for basic map)
+        function fmLoadLeafletMap() {
+            if (window.L) { fmInitLeafletMap(); return; }
             const s = document.createElement('script');
-            s.id = 'gm-api';
-            // callback=fmInitGoogleMap is called by Google after load
-            s.src = 'https://maps.googleapis.com/maps/api/js?key=AIzaSyD-9tSrke72PouQMnMX-a7eZSW0jkFMBWY&libraries=places,geometry&callback=fmInitGoogleMap';
-            s.async = true; s.defer = true;
-            s.onerror = () => {
-                // Key quota exceeded or no network → fall back to OpenStreetMap iframe
-                showToast(`🗺️ — Loading fallback map…`, 'info');
-                fmLoadLeafletFallback();
-            };
-            window.fmInitGoogleMap = fmInitGoogleMap; // expose for callback
+            s.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
+            s.onload = fmInitLeafletMap;
             document.head.appendChild(s);
+            const lk = document.createElement('link');
+            lk.rel = 'stylesheet';
+            lk.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
+            document.head.appendChild(lk);
         }
 
-        function fmInitGoogleMap() {
-            if (!window.google || !window.google.maps) { fmLoadLeafletFallback(); return; }
-            if (_gmMap) { /* already initialised — just re-center */ return; }
+        function fmInitLeafletMap() {
+            if (!window.L) return;
+            if (_fmLMap) { _fmLMap.remove(); _fmLMap = null; }
 
             const savedCoords = getFarmMapCoords();
             const lat = savedCoords ? parseFloat(savedCoords.lat) : 0;
@@ -20109,231 +20091,200 @@ Please diagnose and recommend treatment.`;
             const mapEl = document.getElementById('fm-mapbox');
             if (!mapEl) return;
 
-            _gmMap = new google.maps.Map(mapEl, {
-                center: { lat, lng },
-                zoom,
-                mapTypeId: 'hybrid',          // satellite + labels — same as Google Maps default
-                tilt: 0,
-                mapTypeControl: false,         // we provide our own switcher
-                streetViewControl: true,
-                streetViewControlOptions: { position: google.maps.ControlPosition.RIGHT_BOTTOM },
-                fullscreenControl: true,
-                fullscreenControlOptions: { position: google.maps.ControlPosition.RIGHT_BOTTOM },
-                zoomControl: true,
-                zoomControlOptions: { position: google.maps.ControlPosition.RIGHT_BOTTOM },
-                scaleControl: true,
-                rotateControl: true,
-                gestureHandling: 'greedy',
-                styles: [],                    // no custom styles — pure Google look
-            });
+            _fmLMap = L.map(mapEl, { zoomControl: false, doubleClickZoom: false }).setView([lat, lng], zoom);
+            L.control.zoom({ position: 'bottomright' }).addTo(_fmLMap);
+            L.control.scale({ position: 'bottomleft' }).addTo(_fmLMap);
 
-            _gmInfoWindow = new google.maps.InfoWindow();
-            _gmPlacesService = new google.maps.places.PlacesService(_gmMap);
+            fmApplyTileLayer('hybrid');
 
-            // Live coords readout
-            _gmMap.addListener('mousemove', e => {
+            _fmLMap.on('mousemove', e => {
                 const el = document.getElementById('fm-live-coords');
-                if (el) el.textContent = `${e.latLng.lat().toFixed(6)}, ${e.latLng.lng().toFixed(6)}`;
+                if (el) el.textContent = `${e.latlng.lat.toFixed(6)}, ${e.latlng.lng.toFixed(6)}`;
             });
-            _gmMap.addListener('zoom_changed', () => {
+            _fmLMap.on('zoomend', () => {
                 const el = document.getElementById('fm-zoom-readout');
-                if (el) el.textContent = `Zoom ${_gmMap.getZoom()}`;
+                if (el) el.textContent = `Zoom ${_fmLMap.getZoom()}`;
             });
 
-            // Click handler
-            _gmMap.addListener('click', fmGmHandleClick);
+            _fmLMap.on('click', fmLHandleClick);
+            _fmLMap.on('dblclick', fmLHandleDblClick);
 
-            // Restore saved markers
-            _gmGmMarkers = {};
-            getFarmMapMarkers().forEach((m, i) => fmAddGmMarker(m, i));
+            _fmLMarkers = {};
+            getFarmMapMarkers().forEach((m, i) => fmAddLMarker(m, i));
 
-            // Draw boundary if acres set
-            if (savedCoords?.acres) fmGmDrawBoundary(lat, lng, parseFloat(savedCoords.acres));
+            if (savedCoords?.acres) fmLDrawBoundary(lat, lng, parseFloat(savedCoords.acres));
+            if (savedCoords) fmLAddCentreMarker(lat, lng);
 
-            // Farm centre marker
-            if (savedCoords) fmGmAddCentreMarker(lat, lng);
+            getFarmZones().forEach(z => fmLRestoreZone(z));
 
-            // Restore saved zones
-            getFarmZones().forEach(z => fmGmRestoreZone(z));
-
-            // Mark style button as active
             document.querySelectorAll('.fm-sty-btn').forEach(b => b.classList.remove('active'));
             document.getElementById('fm-sty-hybrid')?.classList.add('active');
 
-            // Update zoom display
             const zEl = document.getElementById('fm-zoom-readout');
-            if (zEl) zEl.textContent = `Zoom ${_gmMap.getZoom()}`;
+            if (zEl) zEl.textContent = `Zoom ${_fmLMap.getZoom()}`;
         }
 
-        // ── CLICK HANDLER ────────────────────────────────────────────
-        function fmGmHandleClick(e) {
-            const lat = e.latLng.lat(), lng = e.latLng.lng();
-            if (_gmCurrentTool === 'measure') {
+        function fmLDivIcon(icon, size) {
+            size = size || 26;
+            return L.divIcon({
+                html: `<div style="font-size:${size}px;line-height:1;filter:drop-shadow(0 2px 4px rgba(0,0,0,0.4));transform:translateY(-${Math.round(size*0.3)}px)">${icon}</div>`,
+                className: '',
+                iconSize: [size, size],
+                iconAnchor: [size/2, size],
+            });
+        }
+
+        // ── CLICK HANDLERS ──────────────────────────────────────────
+        function fmLHandleClick(e) {
+            const lat = e.latlng.lat, lng = e.latlng.lng;
+            if (_fmLCurrentTool === 'measure') {
                 _fmMeasurePoints.push([lng, lat]);
-                fmGmUpdateMeasure();
+                fmLUpdateMeasure();
                 return;
             }
-            if (_gmCurrentTool === 'zone') {
+            if (_fmLCurrentTool === 'zone') {
                 _fmDrawPoints.push([lng, lat]);
-                fmGmUpdateZonePreview();
+                fmLUpdateZonePreview();
                 return;
             }
-            // Pin tool
             const label = prompt(`Label this ${_fmMarkerType} pin (or leave blank):`);
             if (label === null) return;
             const newM = { type:_fmMarkerType, icon:_fmMarkerIcon, label:label||(FM_PIN_TYPES[_fmMarkerType]?.label||_fmMarkerType), lat, lng };
             const all = getFarmMapMarkers(); all.push(newM); saveFarmMapMarkers(all);
-            fmAddGmMarker(newM, all.length - 1);
+            fmAddLMarker(newM, all.length - 1);
             fmRefreshMarkerList();
             showToast('📍 Pin added — ' + newM.label, 'success');
         }
 
-        // ── ADD GOOGLE MAPS MARKER ────────────────────────────────────
-        function fmAddGmMarker(m, i) {
-            if (!_gmMap || !window.google) return;
-            const marker = new google.maps.Marker({
-                position: { lat: +m.lat, lng: +m.lng },
-                map: _gmMap,
-                draggable: true,
-                title: m.label || m.type,
-                label: {
-                    text: m.icon,
-                    fontSize: '22px',
-                    className: 'gm-emoji-label',
-                },
-                icon: {
-                    path: google.maps.SymbolPath.CIRCLE,
-                    scale: 0,   // invisible base — emoji label does the work
-                },
-                optimized: false,
-                zIndex: 100 + i,
-            });
-
-            marker.addListener('click', () => {
-                _gmInfoWindow.setContent(`
-                    <div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;padding:4px 2px;min-width:180px">
-                        <div style="font-weight:700;font-size:15px;color:#1f2937;margin-bottom:6px">${m.icon} ${m.label||m.type}</div>
-                        <div style="font-family:monospace;font-size:11px;color:#6b7280;margin-bottom:10px">${(+m.lat).toFixed(6)}, ${(+m.lng).toFixed(6)}</div>
-                        <button onclick="fmRemoveMarker(${i})" style="padding:5px 14px;background:#fee2e2;color:#dc2626;border:none;border-radius:7px;cursor:pointer;font-size:12px;font-weight:600;font-family:inherit">🗑 Remove Pin</button>
-                    </div>
-                `);
-                _gmInfoWindow.open(_gmMap, marker);
-            });
-
-            marker.addListener('dragend', () => {
-                const pos = marker.getPosition();
-                const all = getFarmMapMarkers();
-                if (all[i]) { all[i].lat = pos.lat(); all[i].lng = pos.lng(); saveFarmMapMarkers(all); fmRefreshMarkerList(); }
-            });
-
-            _gmGmMarkers[i] = marker;
+        function fmLHandleDblClick(e) {
+            if (_fmLCurrentTool !== 'zone' || _fmDrawPoints.length < 3) return;
+            if (!document.getElementById('fm-tool-zone')?.classList.contains('active')) return;
+            const label = prompt('Name this zone:') || _fmZoneType;
+            const color = FM_ZONE_COLORS[_fmZoneType] || '#22c55e';
+            const feat = { type:'Feature', geometry:{ type:'Polygon', coordinates:[[..._fmDrawPoints, _fmDrawPoints[0]]] }, properties:{ label, color, type:_fmZoneType } };
+            const zones = getFarmZones(); zones.push(feat); saveFarmZones(zones);
+            fmLClearZonePreview();
+            fmLRestoreZone(feat);
+            _fmDrawPoints = [];
+            showToast('✅ Zone saved — ' + label, 'success');
         }
 
-        // ── CENTRE MARKER ────────────────────────────────────────────
-        function fmGmAddCentreMarker(lat, lng) {
-            if (!_gmMap || !window.google) return;
-            if (_gmCentreMarker) _gmCentreMarker.setMap(null);
-            _gmCentreMarker = new google.maps.Marker({
-                position: { lat, lng }, map: _gmMap, title: 'Farm Centre',
-                label: { text: '🏡', fontSize: '28px', className: 'gm-emoji-label' },
-                icon: { path: google.maps.SymbolPath.CIRCLE, scale: 0 },
-                optimized: false, zIndex: 200,
+        // ── MARKERS ──────────────────────────────────────────────────
+        function fmAddLMarker(m, i) {
+            if (!_fmLMap || !window.L) return;
+            const marker = L.marker([+m.lat, +m.lng], {
+                icon: fmLDivIcon(m.icon),
+                draggable: true,
+                title: m.label || m.type,
+                zIndexOffset: 100 + i,
+            }).addTo(_fmLMap);
+
+            marker.bindPopup(`
+                <div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;padding:2px 0;min-width:170px">
+                    <div style="font-weight:700;font-size:15px;color:#1f2937;margin-bottom:6px">${m.icon} ${m.label||m.type}</div>
+                    <div style="font-family:monospace;font-size:11px;color:#6b7280;margin-bottom:10px">${(+m.lat).toFixed(6)}, ${(+m.lng).toFixed(6)}</div>
+                    <button onclick="fmRemoveMarker(${i})" style="padding:5px 14px;background:#fee2e2;color:#dc2626;border:none;border-radius:7px;cursor:pointer;font-size:12px;font-weight:600;font-family:inherit">🗑 Remove Pin</button>
+                </div>
+            `);
+
+            marker.on('dragend', () => {
+                const pos = marker.getLatLng();
+                const all = getFarmMapMarkers();
+                if (all[i]) { all[i].lat = pos.lat; all[i].lng = pos.lng; saveFarmMapMarkers(all); fmRefreshMarkerList(); }
             });
-            _gmCentreMarker.addListener('click', () => {
-                _gmInfoWindow.setContent(`<div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;padding:4px"><b style="font-size:15px">🏡 Farm Centre</b><div style="font-family:monospace;font-size:11px;color:#6b7280;margin-top:4px">${lat.toFixed(6)}, ${lng.toFixed(6)}</div></div>`);
-                _gmInfoWindow.open(_gmMap, _gmCentreMarker);
-            });
+
+            _fmLMarkers[i] = marker;
+        }
+
+        function fmLAddCentreMarker(lat, lng) {
+            if (!_fmLMap || !window.L) return;
+            if (_fmLCentreMarker) _fmLMap.removeLayer(_fmLCentreMarker);
+            _fmLCentreMarker = L.marker([lat, lng], { icon: fmLDivIcon('🏡', 30), zIndexOffset: 200 }).addTo(_fmLMap);
+            _fmLCentreMarker.bindPopup(`<div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;padding:2px"><b style="font-size:15px">🏡 Farm Centre</b><div style="font-family:monospace;font-size:11px;color:#6b7280;margin-top:4px">${lat.toFixed(6)}, ${lng.toFixed(6)}</div></div>`);
         }
 
         // ── FARM BOUNDARY ────────────────────────────────────────────
-        function fmGmDrawBoundary(lat, lng, acres) {
-            if (!_gmMap || !window.google) return;
-            if (_gmBoundaryCircle) _gmBoundaryCircle.setMap(null);
+        function fmLDrawBoundary(lat, lng, acres) {
+            if (!_fmLMap || !window.L) return;
+            if (_fmLBoundaryCircle) _fmLMap.removeLayer(_fmLBoundaryCircle);
             const radiusM = Math.sqrt(acres * 4046.86);
-            _gmBoundaryCircle = new google.maps.Circle({
-                map: _gmMap,
-                center: { lat, lng },
+            _fmLBoundaryCircle = L.circle([lat, lng], {
                 radius: radiusM,
-                strokeColor: '#059669', strokeOpacity: 0.9, strokeWeight: 2,
+                color: '#059669', weight: 2, opacity: 0.9,
                 fillColor: '#059669', fillOpacity: 0.06,
-                strokeDashArray: null,
-                clickable: false, zIndex: 1,
-            });
+                interactive: false,
+            }).addTo(_fmLMap);
         }
 
         // ── STYLE SWITCHER ────────────────────────────────────────────
+        function fmApplyTileLayer(style) {
+            if (!_fmLMap || !window.L) return;
+            if (_fmLTileLayer) { _fmLMap.removeLayer(_fmLTileLayer); _fmLTileLayer = null; }
+            if (_fmLLabelsLayer) { _fmLMap.removeLayer(_fmLLabelsLayer); _fmLLabelsLayer = null; }
+
+            if (style === 'hybrid') {
+                _fmLTileLayer = FM_TILE_LAYERS.satellite().addTo(_fmLMap);
+                _fmLLabelsLayer = FM_TILE_LAYERS.labels().addTo(_fmLMap);
+            } else if (style === 'satellite-v9') {
+                _fmLTileLayer = FM_TILE_LAYERS.satellite().addTo(_fmLMap);
+            } else if (style === 'outdoors-v12') {
+                _fmLTileLayer = FM_TILE_LAYERS.terrain().addTo(_fmLMap);
+            } else if (style === 'streets-v12') {
+                _fmLTileLayer = FM_TILE_LAYERS.streets().addTo(_fmLMap);
+            }
+        }
+
         window.fmSetStyle = function(style, btn) {
-            if (!_gmMap || !window.google) return;
             document.querySelectorAll('.fm-sty-btn').forEach(b => b.classList.remove('active'));
             btn.classList.add('active');
-            const typeMap = {
-                'hybrid': 'hybrid',
-                'satellite-v9': 'satellite',
-                'outdoors-v12': 'terrain',
-                'streets-v12': 'roadmap',
-                'light-v11': 'roadmap',
-                'dark-v11': 'roadmap',
-            };
-            _gmMap.setMapTypeId(typeMap[style] || 'hybrid');
+            fmApplyTileLayer(style);
         };
 
         // ── TOOL SWITCHER ─────────────────────────────────────────────
         window.fmSetTool = function(tool, btn) {
             document.querySelectorAll('.fm-tool-btn').forEach(b => b.classList.remove('active'));
             btn.classList.add('active');
-            _gmCurrentTool = tool;
+            _fmLCurrentTool = tool;
             const zc = document.getElementById('fm-zone-card'), mp = document.getElementById('fm-measure-panel');
             if (zc) zc.style.display = tool === 'zone' ? 'block' : 'none';
             if (mp) mp.style.display = tool === 'measure' ? 'block' : 'none';
-            if (tool !== 'zone')    { _fmDrawPoints = []; fmGmClearZonePreview(); }
-            if (tool !== 'measure') { _fmMeasurePoints = []; fmGmClearMeasure(false); }
-            if (_gmMap) _gmMap.setOptions({ draggableCursor: (tool === 'pin') ? 'crosshair' : 'default' });
-        };
-
-        // ── 3D (tilt) ──────────────────────────────────────────────
-        window.fmToggle3D = function() {
-            if (!_gmMap) return;
-            _fm3DOn = !_fm3DOn;
-            _gmMap.setTilt(_fm3DOn ? 45 : 0);
-            showToast((_fm3DOn ? '🏔️ Tilt on — Drag to rotate' : '🏔️ Tilt off — Map is flat again'), 'success');
+            if (tool !== 'zone')    { _fmDrawPoints = []; fmLClearZonePreview(); }
+            if (tool !== 'measure') { _fmMeasurePoints = []; fmLClearMeasure(false); }
+            if (_fmLMap) {
+                _fmLMap.getContainer().style.cursor = (tool === 'pin') ? 'crosshair' : '';
+            }
         };
 
         // ── MEASURE TOOL ──────────────────────────────────────────────
-        function fmGmUpdateMeasure() {
+        function fmLUpdateMeasure() {
             const pts = _fmMeasurePoints;
             const el = document.getElementById('fm-measure-dist'), elPts = document.getElementById('fm-measure-pts');
             if (elPts) elPts.textContent = `${pts.length} point${pts.length !== 1 ? 's' : ''} placed`;
-            if (pts.length < 2) { if (el) el.textContent = '—'; return; }
-
-            let total = 0;
-            for (let i = 1; i < pts.length; i++) total += fmHaversine(pts[i-1], pts[i]);
-            if (el) el.textContent = fmFormatDist(total);
-
-            if (!_gmMap || !window.google) return;
-            const path = pts.map(p => ({ lat: p[1], lng: p[0] }));
-            if (_gmMeasurePath) { _gmMeasurePath.setPath(path); }
+            if (pts.length < 2) { if (el) el.textContent = '—'; }
             else {
-                _gmMeasurePath = new google.maps.Polyline({
-                    path, map: _gmMap,
-                    strokeColor: '#f59e0b', strokeOpacity: 1, strokeWeight: 3,
-                    icons: [{ icon: { path: 'M 0,-1 0,1', strokeOpacity: 1, scale: 3 }, offset: '0', repeat: '12px' }],
-                });
+                let total = 0;
+                for (let i = 1; i < pts.length; i++) total += fmHaversine(pts[i-1], pts[i]);
+                if (el) el.textContent = fmFormatDist(total);
             }
-            // Dot at last point
+
+            if (!_fmLMap || !window.L) return;
+            const path = pts.map(p => [p[1], p[0]]);
+            if (_fmLMeasureLine) { _fmLMeasureLine.setLatLngs(path); }
+            else if (path.length) {
+                _fmLMeasureLine = L.polyline(path, { color: '#f59e0b', weight: 3, dashArray: '8,6' }).addTo(_fmLMap);
+            }
             const last = pts[pts.length-1];
-            const dot = new google.maps.Marker({
-                position: { lat: last[1], lng: last[0] }, map: _gmMap,
-                icon: { path: google.maps.SymbolPath.CIRCLE, scale: 5, fillColor: '#f59e0b', fillOpacity: 1, strokeColor: '#fff', strokeWeight: 2 },
-                optimized: false, zIndex: 300,
-            });
-            _gmMeasureDots.push(dot);
+            if (last) {
+                const dot = L.circleMarker([last[1], last[0]], { radius: 5, color: '#fff', weight: 2, fillColor: '#f59e0b', fillOpacity: 1 }).addTo(_fmLMap);
+                _fmLMeasureDots.push(dot);
+            }
         }
 
-        window.fmClearMeasure = function() { fmGmClearMeasure(true); };
-        function fmGmClearMeasure(resetUI) {
+        window.fmClearMeasure = function() { fmLClearMeasure(true); };
+        function fmLClearMeasure(resetUI) {
             _fmMeasurePoints = [];
-            if (_gmMeasurePath) { _gmMeasurePath.setMap(null); _gmMeasurePath = null; }
-            _gmMeasureDots.forEach(d => d.setMap(null)); _gmMeasureDots = [];
+            if (_fmLMeasureLine) { _fmLMap.removeLayer(_fmLMeasureLine); _fmLMeasureLine = null; }
+            _fmLMeasureDots.forEach(d => _fmLMap.removeLayer(d)); _fmLMeasureDots = [];
             if (resetUI) {
                 const el = document.getElementById('fm-measure-dist'), elPts = document.getElementById('fm-measure-pts');
                 if (el) el.textContent = '—'; if (elPts) elPts.textContent = 'Click map to add points';
@@ -20341,55 +20292,27 @@ Please diagnose and recommend treatment.`;
         }
 
         // ── ZONE DRAW TOOL ────────────────────────────────────────────
-        function fmGmUpdateZonePreview() {
-            if (!_gmMap || !window.google || _fmDrawPoints.length < 1) return;
-            const path = _fmDrawPoints.map(p => ({ lat: p[1], lng: p[0] }));
-            if (_gmZonePreview) { _gmZonePreview.setPath(path); }
+        function fmLUpdateZonePreview() {
+            if (!_fmLMap || !window.L || _fmDrawPoints.length < 1) return;
+            const path = _fmDrawPoints.map(p => [p[1], p[0]]);
+            if (_fmLZonePreviewLine) { _fmLZonePreviewLine.setLatLngs(path); }
             else {
-                _gmZonePreview = new google.maps.Polyline({
-                    path, map: _gmMap,
-                    strokeColor: FM_ZONE_COLORS[_fmZoneType] || '#22c55e',
-                    strokeOpacity: 0.9, strokeWeight: 2.5,
-                    icons: [{ icon: { path: 'M 0,-1 0,1', strokeOpacity: 1, scale: 3 }, offset: '0', repeat: '10px' }],
-                });
+                _fmLZonePreviewLine = L.polyline(path, { color: FM_ZONE_COLORS[_fmZoneType] || '#22c55e', weight: 2.5, dashArray: '6,6' }).addTo(_fmLMap);
             }
             if (_fmDrawPoints.length >= 3) showToast(`✏️ Drawing — Double-click to finish zone`, 'info');
         }
 
-        function fmGmClearZonePreview() {
-            if (_gmZonePreview) { _gmZonePreview.setMap(null); _gmZonePreview = null; }
+        function fmLClearZonePreview() {
+            if (_fmLZonePreviewLine) { _fmLMap.removeLayer(_fmLZonePreviewLine); _fmLZonePreviewLine = null; }
         }
 
-        // Double-click to finish zone
-        document.addEventListener('dblclick', e => {
-            if (_gmCurrentTool !== 'zone' || _fmDrawPoints.length < 3) return;
-            if (!document.getElementById('fm-tool-zone')?.classList.contains('active')) return;
-            e.preventDefault();
-            const label = prompt('Name this zone:') || _fmZoneType;
-            const color = FM_ZONE_COLORS[_fmZoneType] || '#22c55e';
-            const feat = { type:'Feature', geometry:{ type:'Polygon', coordinates:[[..._fmDrawPoints, _fmDrawPoints[0]]] }, properties:{ label, color, type:_fmZoneType } };
-            const zones = getFarmZones(); zones.push(feat); saveFarmZones(zones);
-            fmGmClearZonePreview();
-            fmGmRestoreZone(feat);
-            _fmDrawPoints = [];
-            showToast('✅ Zone saved — ' + label, 'success');
-        });
-
-        function fmGmRestoreZone(feat) {
-            if (!_gmMap || !window.google) return;
-            const coords = feat.geometry.coordinates[0].map(c => ({ lat: c[1], lng: c[0] }));
+        function fmLRestoreZone(feat) {
+            if (!_fmLMap || !window.L) return;
+            const coords = feat.geometry.coordinates[0].map(c => [c[1], c[0]]);
             const color = feat.properties?.color || '#22c55e';
-            const poly = new google.maps.Polygon({
-                paths: coords, map: _gmMap,
-                strokeColor: color, strokeOpacity: 0.9, strokeWeight: 2,
-                fillColor: color, fillOpacity: 0.2, clickable: true,
-            });
-            poly.addListener('click', () => {
-                _gmInfoWindow.setContent(`<div style="font-family:-apple-system,sans-serif;padding:4px"><b>${feat.properties?.label || 'Zone'}</b><br><span style="font-size:11px;color:#6b7280">${feat.properties?.type||'zone'}</span></div>`);
-                _gmInfoWindow.setPosition(coords[Math.floor(coords.length/2)]);
-                _gmInfoWindow.open(_gmMap);
-            });
-            _gmZonePolygons.push(poly);
+            const poly = L.polygon(coords, { color, weight: 2, opacity: 0.9, fillColor: color, fillOpacity: 0.2 }).addTo(_fmLMap);
+            poly.bindPopup(`<div style="font-family:-apple-system,sans-serif;padding:2px"><b>${feat.properties?.label || 'Zone'}</b><br><span style="font-size:11px;color:#6b7280">${feat.properties?.type||'zone'}</span></div>`);
+            _fmLZonePolygons.push(poly);
         }
 
         window.fmSetZoneType = function(type) {
@@ -20398,34 +20321,34 @@ Please diagnose and recommend treatment.`;
             document.getElementById('fmzt-' + type)?.classList.add('active');
         };
 
-        // ── SEARCH (Google Places Autocomplete) ───────────────────────
+        // ── SEARCH (OpenStreetMap Nominatim — free, no key) ────────────
         window.fmSearchDebounce = function(q) {
-            clearTimeout(_gmSearchTimer);
+            clearTimeout(_fmLSearchTimer);
             const el = document.getElementById('fm-search-results');
             if (!q || q.length < 3) { if (el) el.style.display = 'none'; return; }
-            _gmSearchTimer = setTimeout(() => fmGmGeocode(q), 400);
+            _fmLSearchTimer = setTimeout(() => fmLGeocode(q), 500);
         };
 
-        function fmGmGeocode(q) {
-            if (!_gmPlacesService || !window.google) return;
-            const req = { query: q, fields: ['name','geometry','formatted_address'] };
-            _gmPlacesService.findPlaceFromQuery(req, (results, status) => {
-                const el = document.getElementById('fm-search-results'); if (!el) return;
-                if (status !== google.maps.places.PlacesServiceStatus.OK || !results?.length) {
-                    el.style.display = 'none'; return;
-                }
-                el.innerHTML = results.slice(0,5).map(r => {
-                    const lat = r.geometry.location.lat(), lng = r.geometry.location.lng();
-                    const name = (r.name + (r.formatted_address ? ', ' + r.formatted_address : '')).replace(/'/g,"&#39;");
-                    return `<div class="fm-sr-item" onclick="fmFlyToPlace(${lat},${lng},'${name}')">${r.name}${r.formatted_address?'<span style=\'color:#9ca3af;font-size:0.75rem\'> — '+r.formatted_address+'</span>':''}</div>`;
+        async function fmLGeocode(q) {
+            const el = document.getElementById('fm-search-results'); if (!el) return;
+            try {
+                const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(q)}&limit=5`);
+                const results = await res.json();
+                if (!results?.length) { el.style.display = 'none'; return; }
+                el.innerHTML = results.map(r => {
+                    const name = r.display_name.replace(/'/g, "&#39;");
+                    return `<div class="fm-sr-item" onclick="fmFlyToPlace(${r.lat},${r.lon},'${name}')">${name}</div>`;
                 }).join('');
                 el.style.display = 'block';
-            });
+            } catch (e) {
+                el.style.display = 'none';
+            }
         }
 
         window.fmFlyToPlace = function(lat, lng, name) {
-            if (!_gmMap) return;
-            _gmMap.panTo({ lat, lng }); _gmMap.setZoom(17);
+            if (!_fmLMap) return;
+            lat = +lat; lng = +lng;
+            _fmLMap.setView([lat, lng], 17);
             const si = document.getElementById('fm-search'), sr = document.getElementById('fm-search-results');
             if (si) si.value = name; if (sr) sr.style.display = 'none';
             const latEl = document.getElementById('fm-lat'), lngEl = document.getElementById('fm-lng');
@@ -20434,8 +20357,8 @@ Please diagnose and recommend treatment.`;
 
         // ── FLY TO PIN ────────────────────────────────────────────────
         window.fmFlyToPin = function(lat, lng) {
-            if (!_gmMap) return;
-            _gmMap.panTo({ lat: +lat, lng: +lng }); _gmMap.setZoom(19);
+            if (!_fmLMap) return;
+            _fmLMap.setView([+lat, +lng], 19);
         };
 
         // ── GO TO COORDS ──────────────────────────────────────────────
@@ -20446,11 +20369,11 @@ Please diagnose and recommend treatment.`;
             if (isNaN(lat) || isNaN(lng)) { showToast(`⚠️ — Enter valid lat/lng coordinates`, 'error'); return; }
             saveFarmMapCoords({ lat, lng, acres });
             if (acres) { farmData.size = acres; try { saveFarmData(); } catch(e) {} }
-            if (_gmMap) {
-                _gmMap.panTo({ lat, lng }); _gmMap.setZoom(17);
-                if (acres) fmGmDrawBoundary(lat, lng, parseFloat(acres));
-                fmGmAddCentreMarker(lat, lng);
-            } else { renderFarmMap(); setTimeout(fmInitGoogleMap, 200); }
+            if (_fmLMap) {
+                _fmLMap.setView([lat, lng], 17);
+                if (acres) fmLDrawBoundary(lat, lng, parseFloat(acres));
+                fmLAddCentreMarker(lat, lng);
+            } else { renderFarmMap(); setTimeout(fmInitLeafletMap, 200); }
             showToast(`🛰️ Farm located — Coordinates saved${acres ? ' — ' + acres + ' acres' : ''}`, 'success');
         };
 
@@ -20462,7 +20385,7 @@ Please diagnose and recommend treatment.`;
                 const lat = pos.coords.latitude.toFixed(6), lng = pos.coords.longitude.toFixed(6);
                 const latEl = document.getElementById('fm-lat'), lngEl = document.getElementById('fm-lng');
                 if (latEl) latEl.value = lat; if (lngEl) lngEl.value = lng;
-                if (_gmMap) { _gmMap.panTo({ lat:+lat, lng:+lng }); _gmMap.setZoom(17); }
+                if (_fmLMap) { _fmLMap.setView([+lat, +lng], 17); }
                 showToast(`📍 Location found — Click "Go to Farm" to save`, 'success');
             }, () => showToast(`⚠️ — Could not get GPS — enter coordinates manually`, 'error'));
         };
@@ -20476,18 +20399,16 @@ Please diagnose and recommend treatment.`;
 
         // ── REMOVE MARKER ─────────────────────────────────────────────
         window.fmRemoveMarker = function(i) {
-            if (_gmGmMarkers[i]) { _gmGmMarkers[i].setMap(null); delete _gmGmMarkers[i]; }
-            if (_gmInfoWindow) _gmInfoWindow.close();
+            if (_fmLMarkers[i]) { _fmLMap.removeLayer(_fmLMarkers[i]); delete _fmLMarkers[i]; }
             const all = getFarmMapMarkers(); all.splice(i, 1); saveFarmMapMarkers(all);
             fmRefreshMarkerList();
-            // Re-add all to fix indices
-            Object.values(_gmGmMarkers).forEach(m => m.setMap(null)); _gmGmMarkers = {};
-            getFarmMapMarkers().forEach((m, idx) => fmAddGmMarker(m, idx));
+            Object.values(_fmLMarkers).forEach(m => _fmLMap.removeLayer(m)); _fmLMarkers = {};
+            getFarmMapMarkers().forEach((m, idx) => fmAddLMarker(m, idx));
         };
 
         window.fmClearMarkers = function() {
             if (!confirm('Remove all pins from the map?')) return;
-            Object.values(_gmGmMarkers).forEach(m => m.setMap(null)); _gmGmMarkers = {};
+            Object.values(_fmLMarkers).forEach(m => _fmLMap.removeLayer(m)); _fmLMarkers = {};
             saveFarmMapMarkers([]); fmRefreshMarkerList();
             showToast(`🗑️ Cleared — All pins removed`, 'success');
         };
@@ -20505,7 +20426,7 @@ Please diagnose and recommend treatment.`;
                 </div>`).join('') : '<div style="font-size:0.75rem;color:#9ca3af;font-style:italic;text-align:center;padding:20px 0">No pins yet</div>';
         }
 
-        // ── OPEN IN GOOGLE MAPS ───────────────────────────────────────
+        // ── OPEN IN GOOGLE MAPS (just a link out — no API/billing involved) ───
         window.fmOpenInGoogleMaps = function() {
             const c = getFarmMapCoords(); if (!c) { showToast(`⚠️ — Set farm coordinates first`, 'error'); return; }
             window.open(`https://www.google.com/maps/@${c.lat},${c.lng},17z/data=!3m1!1e3`, '_blank');
@@ -20516,30 +20437,16 @@ Please diagnose and recommend treatment.`;
         window.fmResetMap = function() {
             if (!confirm('Clear all farm map data — pins, zones and coordinates?')) return;
             localStorage.removeItem('farmMapCoords'); localStorage.removeItem('farmMapMarkers'); localStorage.removeItem('farmMapZones');
-            Object.values(_gmGmMarkers).forEach(m => m.setMap(null)); _gmGmMarkers = {};
-            if (_gmCentreMarker) _gmCentreMarker.setMap(null); _gmCentreMarker = null;
-            if (_gmBoundaryCircle) _gmBoundaryCircle.setMap(null); _gmBoundaryCircle = null;
-            _gmZonePolygons.forEach(p => p.setMap(null)); _gmZonePolygons = [];
-            fmGmClearMeasure(true); fmGmClearZonePreview();
+            Object.values(_fmLMarkers).forEach(m => _fmLMap.removeLayer(m)); _fmLMarkers = {};
+            if (_fmLCentreMarker) { _fmLMap.removeLayer(_fmLCentreMarker); _fmLCentreMarker = null; }
+            if (_fmLBoundaryCircle) { _fmLMap.removeLayer(_fmLBoundaryCircle); _fmLBoundaryCircle = null; }
+            _fmLZonePolygons.forEach(p => _fmLMap.removeLayer(p)); _fmLZonePolygons = [];
+            fmLClearMeasure(true); fmLClearZonePreview();
             fmRefreshMarkerList();
-            if (_gmMap) { _gmMap.panTo({lat:0,lng:20}); _gmMap.setZoom(3); }
+            if (_fmLMap) { _fmLMap.setView([0,20], 3); }
             showToast(`🗑️ Reset — Farm map cleared`, 'success');
         };
 
-        // ── LEAFLET FALLBACK ──────────────────────────────────────────
-        function fmLoadLeafletFallback() {
-            if (window.L) { fmInitLeafletFallback(); return; }
-            const s = document.createElement('script'); s.src='https://unpkg.com/leaflet@1.9.4/dist/leaflet.js'; s.onload=fmInitLeafletFallback; document.head.appendChild(s);
-            const lk = document.createElement('link'); lk.rel='stylesheet'; lk.href='https://unpkg.com/leaflet@1.9.4/dist/leaflet.css'; document.head.appendChild(lk);
-        }
-        function fmInitLeafletFallback() {
-            const sc = getFarmMapCoords();
-            const lat=sc?parseFloat(sc.lat):0, lng=sc?parseFloat(sc.lng):20, zoom=sc?16:4;
-            const el = document.getElementById('fm-mapbox'); if (!el) return;
-            _fmLeafletMap = L.map(el).setView([lat,lng],zoom);
-            _fmActiveTileLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',{attribution:'Tiles © Esri',maxZoom:20}).addTo(_fmLeafletMap);
-        }
-        function fmLoadLeaflet() { fmLoadGoogleMaps(); }
 
 
         // ============================================================
