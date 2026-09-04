@@ -17979,7 +17979,7 @@ TOTAL RECORDS: ${(fd.livestock||[]).length} livestock, ${(fd.transactions||[]).l
                         </div>
                         <div id="ai-status-sms" style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:#f9fafb;border-radius:10px;border:1px solid #e5e7eb;">
                             <div id="ai-status-sms-dot" style="width:10px;height:10px;border-radius:50%;background:#d1d5db;flex-shrink:0;"></div>
-                            <div><div style="font-size:0.82rem;font-weight:600;color:#374151;">SMS Alerts</div><div id="ai-status-sms-text" style="font-size:0.72rem;color:#9ca3af;">Not configured · Needs Twilio</div></div>
+                            <div><div style="font-size:0.82rem;font-weight:600;color:#374151;">SMS Alerts</div><div id="ai-status-sms-text" style="font-size:0.72rem;color:#9ca3af;">Not configured · Needs Africa's Talking</div></div>
                         </div>
                         <div id="ai-status-server" style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:#f9fafb;border-radius:10px;border:1px solid #e5e7eb;">
                             <div id="ai-status-server-dot" style="width:10px;height:10px;border-radius:50%;background:#d1d5db;flex-shrink:0;"></div>
@@ -18330,15 +18330,15 @@ TOTAL RECORDS: ${(fd.livestock||[]).length} livestock, ${(fd.transactions||[]).l
                     if (serverDot) serverDot.style.background = '#059669';
                     if (serverText) { serverText.textContent = 'Connected'; serverText.style.color = '#059669'; }
 
-                    // The backend reports whether Twilio SMS is actually configured server-side
+                    // The backend reports whether Africa's Talking SMS is actually configured server-side
                     let data = {};
                     try { data = await res.json(); } catch (e) { /* non-JSON response, ignore */ }
                     if (data.smsConfigured) {
                         if (smsDot) smsDot.style.background = '#059669';
-                        if (smsText) { smsText.textContent = 'Configured via Twilio'; smsText.style.color = '#059669'; }
+                        if (smsText) { smsText.textContent = 'Configured via Africa\'s Talking'; smsText.style.color = '#059669'; }
                     } else {
                         if (smsDot) smsDot.style.background = '#d1d5db';
-                        if (smsText) { smsText.textContent = 'Not configured · Needs Twilio'; smsText.style.color = '#9ca3af'; }
+                        if (smsText) { smsText.textContent = 'Not configured · Needs Africa\'s Talking'; smsText.style.color = '#9ca3af'; }
                     }
                 } else {
                     if(msgEl) msgEl.textContent = `⚠️ Server responded with status ${res.status}`;
