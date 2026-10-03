@@ -17438,11 +17438,15 @@ TOTAL RECORDS: ${(fd.livestock||[]).length} livestock, ${(fd.transactions||[]).l
             openProfileDetail(profileId);
         };
 
-        window.deleteProfile = function(profileId) {
+        window.deleteProfile = async function(profileId) {
             const profiles = getAnimalProfiles();
             const p = profiles.find(x => x.id === profileId);
             if (!p || !confirm(`Delete profile for "${p.name}"? This cannot be undone.`)) return;
             saveAnimalProfiles(profiles.filter(x => x.id !== profileId));
+            // saveAnimalProfiles only upserts remaining records — it never tells
+            // Supabase to drop the removed one, so without this the profile
+            // reappears on the next cloud sync. Explicitly delete it remotely too.
+            try { await sbDelete('animalProfiles', profileId); } catch(e) { console.warn('sbDelete animalProfiles failed:', e); }
             document.getElementById('profile-detail-modal').classList.add('hidden');
             renderAnimalHub('profiles');
         };
