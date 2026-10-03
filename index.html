@@ -14956,7 +14956,8 @@ window._LOGO_B64 = "data:image/jpeg;base64,/9j/4QCCRXhpZgAATU0AKgAAAAgABAEAAAMAA
                     `;
                     break;
 
-                case 'anitracExports','animalProfiles':
+                case 'anitracExports':
+                case 'animalProfiles':
                     formHtml = `
                         <div class="grid grid-cols-2 gap-4">
                             ${input('edit-ex-date', 'Export Date', 'date', record.exportDate||'')}
@@ -15183,7 +15184,8 @@ window._LOGO_B64 = "data:image/jpeg;base64,/9j/4QCCRXhpZgAATU0AKgAAAAgABAEAAAMAA
                         if (updatedRecord.chipNo && updatedRecord.moveDate) { isValid = true; }
                         break;
 
-                    case 'anitracExports','animalProfiles':
+                    case 'anitracExports':
+                    case 'animalProfiles':
                         updatedRecord.exportDate = document.getElementById('edit-ex-date')?.value;
                         updatedRecord.certNo = document.getElementById('edit-ex-cert')?.value.trim();
                         updatedRecord.anitracRef = document.getElementById('edit-ex-ref')?.value.trim();
@@ -15215,7 +15217,7 @@ window._LOGO_B64 = "data:image/jpeg;base64,/9j/4QCCRXhpZgAATU0AKgAAAAgABAEAAAMAA
                         renderAnimalHub('animals');
                     } else if (collectionName === 'journal') {
                         renderJournal(farmData.journal);
-                    } else if (collectionName === 'anitracRecords' || collectionName === 'anitracMovements' || collectionName === 'anitracExports','animalProfiles') {
+                    } else if (collectionName === 'anitracRecords' || collectionName === 'anitracMovements' || collectionName === 'anitracExports' || collectionName === 'animalProfiles') {
                         renderAnimalHub('anitrac');
                     } else {
                         window.changeView(collectionToView(collectionName)); // Re-render the current view to show changes
